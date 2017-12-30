@@ -540,74 +540,76 @@ export type KeysDelegate<T> = (t: T) => string[];
 
 export class NameIndex<T> {
 
-    private _keysDelegate: KeysDelegate<T>;
     private _nodeArray: NameIndexNode<T>[];
     private _binarySearch: BinarySearch<NameIndexNode<T>>;
     private _collator: Intl.Collator;
+    private _equalityFn: (a:T, b:T) => boolean;
 
-    constructor(keysDelegate: KeysDelegate<T>) {
-        this._keysDelegate = keysDelegate;
+    constructor() {
         this._nodeArray = [];
         this._binarySearch = new BinarySearch<NameIndexNode<T>>(this._nodeArray);
         this._collator = new Intl.Collator('en');
     }
 
-    add(item: T) {
+    set equalityFn(fn: (a: T, b: T) => boolean) {
+        this._equalityFn = fn;
+    }
 
-        let suffixes = this._keysDelegate(item);
+    add(item: T, key: string|string[]) {
+
+        let keys = Array.isArray(key) ? key : [key];
         let node: NameIndexNode<T>;
 
-        for (let n = 0; n < suffixes.length; ++n) {
+        for (let n = 0; n < keys.length; ++n) {
 
-            node = this._nodeFind(suffixes[n]);
+            node = this._nodeFind(keys[n]);
 
             if (node) {
                 node.items.push(item);
             } else {
-                this._insertNode({ key: suffixes[n], items: [item] });
+                this._insertNode({ key: keys[n], items: [item] });
             }
         }
 
     }
 
-    addMany(items: T[]) {
-        for (let n = 0; n < items.length; ++n) {
-            this.add(items[n]);
-        }
-    }
+    remove(item: T, key:string|string[]) {
 
-    remove(item: T) {
-
-        let suffixes = this._keysDelegate(item);
+        let keys = Array.isArray(key) ? key : [key];
         let node: NameIndexNode<T>;
         let i: number;
+        let iNode:number;
+        let predicate:(t:T) => boolean;
 
-        for (let n = 0; n < suffixes.length; ++n) {
+        if(this._equalityFn) {
+            let eqFn = this._equalityFn;
+            predicate = t => {
+                return eqFn(item, t);
+            }
+        } else {
+            predicate = t => {
+                return item === t;
+            }
+        }
 
-            node = this._nodeFind(suffixes[n]);
-            if (!node) {
+        for (let n = 0; n < keys.length; ++n) {
+
+            iNode = this._nodeIndex(keys[n]);
+            if(iNode < 0) {
                 continue;
             }
-
-            i = node.items.indexOf(item);
+            node = this._nodeArray[iNode];
+            i = node.items.findIndex(predicate);
 
             if (i > -1) {
                 node.items.splice(i, 1);
-                /* uneccessary? save a lookup and splice
                 if (!node.items.length) {
-                    this._deleteNode(node);
+                    this._nodeArray.splice(iNode, 1);
                 }
-                */
             }
 
         }
 
-    }
-
-    removeMany(items: T[]) {
-        for (let n = 0; n < items.length; ++n) {
-            this.remove(items[n]);
-        }
     }
 
     /**
@@ -641,9 +643,9 @@ export class NameIndex<T> {
         return this._nodeArray;
     }
 
-    fromJSON(data:NameIndexNode<T>[]) {
+    restore(data:NameIndexNode<T>[]) {
         this._nodeArray = data;
-        this._binarySearch = new BinarySearch<NameIndexNode<T>>(this._nodeArray);
+        this._binarySearch.sortedArray = data;
     }
 
     private _nodeMatch(lcText: string) {
@@ -661,14 +663,17 @@ export class NameIndex<T> {
     }
 
     private _nodeFind(lcText: string) {
+        let i = this._nodeIndex(lcText);
+        return i < 0 ? undefined : this._nodeArray[i];
+    }
 
+    private _nodeIndex(lcText:string) {
         let collator = this._collator;
         let compareFn = (n: NameIndexNode<T>) => {
             return collator.compare(n.key, lcText);
         }
-
-        return this._binarySearch.find(compareFn);
-
+        let result = this._binarySearch.search(compareFn);
+        return result.isExactMatch ? result.rank : -1;
     }
 
     private _insertNode(node: NameIndexNode<T>) {
