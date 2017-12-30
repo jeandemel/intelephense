@@ -65,12 +65,12 @@ export interface PhpSymbol extends SymbolIdentifier {
     associated?: PhpSymbol[];
     children?: PhpSymbol[];
     value?: string;
-    location?: HashedLocation;
 }
 
 export interface SymbolIdentifier {
     kind: SymbolKind;
     name: string;
+    location:HashedLocation;
     scope?: string;
 }
 
