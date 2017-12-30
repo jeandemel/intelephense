@@ -4,7 +4,8 @@
 
 'use strict';
 
-import { Range } from 'vscode-languageserver-types';
+import { Range, Position } from 'vscode-languageserver-types';
+import * as util from './util';
 
 export interface Predicate<T> {
     (t: T): boolean;
@@ -474,15 +475,11 @@ export class MultiVisitor<T> implements TreeVisitor<T> {
 
 export class BinarySearch<T> {
 
-    private _sortedArray: T[];
-
-    constructor(sortedArray: T[]) {
-        this._sortedArray = sortedArray;
-    }
+    constructor(public sortedArray: T[]) { }
 
     find(compare: (n: T) => number) {
         let result = this.search(compare);
-        return result.isExactMatch ? this._sortedArray[result.rank] : null;
+        return result.isExactMatch ? this.sortedArray[result.rank] : null;
     }
 
     rank(compare: (n: T) => number) {
@@ -491,13 +488,13 @@ export class BinarySearch<T> {
 
     range(compareLower: (n: T) => number, compareUpper: (T) => number) {
         let rankLower = this.rank(compareLower);
-        return this._sortedArray.slice(rankLower, this.search(compareUpper, rankLower).rank);
+        return this.sortedArray.slice(rankLower, this.search(compareUpper, rankLower).rank);
     }
 
     search(compare: (n: T) => number, offset?: number): BinarySearchResult {
 
         let left = offset ? offset : 0;
-        let right = this._sortedArray.length - 1;
+        let right = this.sortedArray.length - 1;
         let mid = 0;
         let compareResult = 0;
         let searchResult: BinarySearchResult;
@@ -510,7 +507,7 @@ export class BinarySearch<T> {
             }
 
             mid = Math.floor((left + right) / 2);
-            compareResult = compare(this._sortedArray[mid]);
+            compareResult = compare(this.sortedArray[mid]);
 
             if (compareResult < 0) {
                 left = mid + 1;
@@ -748,3 +745,53 @@ export class SortedList<T> {
     }
 
 }
+
+export interface Locatable extends TreeLike {
+    location: {range:Range};
+}
+
+export class FindByStartPositionTraverser<T extends Locatable> {
+
+    private _search: BinarySearch<T>
+
+    constructor() { 
+        this._search = new BinarySearch([]);
+    }
+
+    find(position:Position, node:T) {
+
+        let found:T;
+        let compareFn: (t: T) => number = t => {
+            let dLine = t.location.range.start.line - position.line;
+            return dLine !== 0 ? dLine : t.location.range.start.character - position.character;
+        }
+
+        while(true) {
+
+            if(node.location && util.positionEquality(node.location.range.start, position)) {
+                found = node;
+                break;
+            }
+
+            if(!node.children || node.children.length < 1) {
+                break;
+            }
+
+            this._search.sortedArray = node.children as T[];
+            let result = this._search.search(compareFn);
+            if(result.isExactMatch) {
+                node = node.children[result.rank] as T;
+            } else if(result.rank > 0) {
+                node = node.children[result.rank - 1] as T;
+            } else {
+                break;
+            }
+
+        }
+
+        return found;
+
+    }
+
+}
+
