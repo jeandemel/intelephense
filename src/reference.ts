@@ -28,12 +28,12 @@ export namespace Reference {
 }
 
 export interface Scope {
-    location: Location;
+    location: HashedLocation;
     children: (Scope | Reference)[]
 }
 
 export namespace Scope {
-    export function create(location: Location): Scope {
+    export function create(location: HashedLocation): Scope {
         return {
             location: location,
             children: []

@@ -385,7 +385,7 @@ export class SymbolStore {
             case SymbolKind.Variable:
             case SymbolKind.Parameter:
                 //@todo global vars?
-                table = this.getSymbolTable(ref.location.uri);
+                table = this._tableIndex[ref.location.uriHash];
                 if (table) {
                     let scope = table.scope(ref.location.range.start);
 

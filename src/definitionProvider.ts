@@ -22,7 +22,7 @@ export class DefinitionProvider {
     provideDefinition(uri: string, position: Position) {
 
         let doc = this.documentStore.find(uri);
-        let table = this.refStore.getReferenceTable(uri);
+        let table = this.refStore.getInMemoryTable(uri);
 
         if (!doc || !table) {
             return null;

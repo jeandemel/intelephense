@@ -12,7 +12,7 @@ import { SymbolKind, PhpSymbol, SymbolModifier } from './symbol';
 import { SymbolStore, SymbolTable } from './symbolStore';
 import { ParsedDocument, NodeTransform } from './parsedDocument';
 import { NameResolver } from './nameResolver';
-import { Predicate, BinarySearch, BinarySearchResult } from './types';
+import { Predicate, BinarySearch, BinarySearchResult, HashedLocation } from './types';
 import * as lsp from 'vscode-languageserver-types';
 import { isInRange } from './util';
 import { TypeString } from './typeString';
@@ -20,6 +20,7 @@ import { TypeAggregate, MemberMergeStrategy } from './typeAggregate';
 import * as util from './util';
 import { PhpDocParser, Tag } from './phpDoc';
 import { Reference, Scope, ReferenceTable } from './reference';
+import * as uriMap from './uriMap';
 
 interface TypeNodeTransform extends NodeTransform {
     type: string;
@@ -65,7 +66,7 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
         this._classStack = [];
         this._symbolTable = this.symbolStore.getSymbolTable(this.doc.uri);
         this._symbols = this._symbolTable.filter(this._symbolFilter);
-        this._scopeStack = [Scope.create(lsp.Location.create(this.doc.uri, util.cloneRange(this._symbols.shift().location.range)))]; //file/root node
+        this._scopeStack = [Scope.create(HashedLocation.create(uriMap.id(this.doc.uri), util.cloneRange(this._symbols.shift().location.range)))]; //file/root node
     }
 
     get refTable() {
@@ -86,7 +87,7 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
             case PhraseType.NamespaceDefinition:
                 {
                     let s = this._symbols.shift();
-                    this._scopeStackPush(Scope.create(this.doc.nodeLocation(node)));
+                    this._scopeStackPush(Scope.create(this.doc.nodeHashedLocation(node)));
                     this.nameResolver.namespace = s;
                     this._transformStack.push(new NamespaceDefinitionTransform());
                 }
@@ -172,7 +173,7 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
             case PhraseType.AnonymousClassDeclaration:
                 {
                     let s = this._symbols.shift() || PhpSymbol.create(SymbolKind.Class, '', this.doc.nodeHashedLocation(<Phrase>node));
-                    this._scopeStackPush(Scope.create(this.doc.nodeLocation(<Phrase>node)));
+                    this._scopeStackPush(Scope.create(this.doc.nodeHashedLocation(<Phrase>node)));
                     this.nameResolver.pushClass(s);
                     this._classStack.push(TypeAggregate.create(this.symbolStore, s.name));
                     this._variableTable.pushScope();
@@ -232,19 +233,19 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
 
             case PhraseType.QualifiedName:
                 this._transformStack.push(
-                    new QualifiedNameTransform(this._nameSymbolType(<Phrase>parent), this.doc.nodeLocation(node), this.nameResolver)
+                    new QualifiedNameTransform(this._nameSymbolType(<Phrase>parent), this.doc.nodeHashedLocation(node), this.nameResolver)
                 );
                 break;
 
             case PhraseType.FullyQualifiedName:
                 this._transformStack.push(
-                    new FullyQualifiedNameTransform(this._nameSymbolType(<Phrase>parent), this.doc.nodeLocation(node))
+                    new FullyQualifiedNameTransform(this._nameSymbolType(<Phrase>parent), this.doc.nodeHashedLocation(node))
                 );
                 break;
 
             case PhraseType.RelativeQualifiedName:
                 this._transformStack.push(
-                    new RelativeQualifiedNameTransform(this._nameSymbolType(<Phrase>parent), this.doc.nodeLocation(node), this.nameResolver)
+                    new RelativeQualifiedNameTransform(this._nameSymbolType(<Phrase>parent), this.doc.nodeHashedLocation(node), this.nameResolver)
                 );
                 break;
 
@@ -253,7 +254,7 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
                 break;
 
             case PhraseType.SimpleVariable:
-                this._transformStack.push(new SimpleVariableTransform(this.doc.nodeLocation(node), this._variableTable));
+                this._transformStack.push(new SimpleVariableTransform(this.doc.nodeHashedLocation(node), this._variableTable));
                 break;
 
             case PhraseType.ListIntrinsic:
@@ -311,7 +312,7 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
                 break;
 
             case PhraseType.ScopedMemberName:
-                this._transformStack.push(new ScopedMemberNameTransform(this.doc.nodeLocation(node)));
+                this._transformStack.push(new ScopedMemberNameTransform(this.doc.nodeHashedLocation(node)));
                 break;
 
             case PhraseType.Identifier:
@@ -335,7 +336,7 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
                 break;
 
             case PhraseType.MemberName:
-                this._transformStack.push(new MemberNameTransform(this.doc.nodeLocation(node)));
+                this._transformStack.push(new MemberNameTransform(this.doc.nodeHashedLocation(node)));
                 break;
 
             case PhraseType.AnonymousFunctionUseVariable:
@@ -362,7 +363,7 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
             case PhraseType.RelativeScope:
                 let context = this._classStack.length ? this._classStack[this._classStack.length - 1] : null;
                 let name = context ? context.name : '';
-                this._transformStack.push(new RelativeScopeTransform(name, this.doc.nodeLocation(node)));
+                this._transformStack.push(new RelativeScopeTransform(name, this.doc.nodeHashedLocation(node)));
                 break;
 
             case PhraseType.TernaryExpression:
@@ -546,7 +547,7 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
 
     private _methodDeclaration(node: Phrase) {
 
-        let scope = Scope.create(this.doc.nodeLocation(node));
+        let scope = Scope.create(this.doc.nodeHashedLocation(node));
         this._scopeStackPush(scope);
         this._variableTable.pushScope(['$this']);
         let type = this._classStack.length ? this._classStack[this._classStack.length - 1] : null;
@@ -572,7 +573,7 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
 
     private _functionDeclaration(node: Phrase) {
         let symbol = this._symbols.shift();
-        this._scopeStackPush(Scope.create(this.doc.nodeLocation(node)));
+        this._scopeStackPush(Scope.create(this.doc.nodeHashedLocation(node)));
         this._variableTable.pushScope();
 
         let children = symbol && symbol.children ? symbol.children : [];
@@ -587,7 +588,7 @@ export class ReferenceReader implements TreeVisitor<Phrase | Token> {
 
     private _anonymousFunctionCreationExpression(node: Phrase) {
         let symbol = this._symbols.shift();
-        this._scopeStackPush(Scope.create(this.doc.nodeLocation(node)));
+        this._scopeStackPush(Scope.create(this.doc.nodeHashedLocation(node)));
         let carry: string[] = ['$this'];
         let children = symbol && symbol.children ? symbol.children : [];
         let s: PhpSymbol;
@@ -629,7 +630,7 @@ class TokenTransform implements TypeNodeTransform, TextNodeTransform {
     }
 
     get location() {
-        return this.doc.nodeLocation(this.token);
+        return this.doc.nodeHashedLocation(this.token);
     }
 
     get type() {
@@ -665,7 +666,7 @@ class NamespaceNameTransform implements NodeTransform {
     }
 
     get location() {
-        return this.document.nodeLocation(this.node);
+        return this.document.nodeHashedLocation(this.node);
     }
 
     push(transform: NodeTransform) {
@@ -1229,7 +1230,7 @@ class RelativeScopeTransform implements TypeNodeTransform, ReferenceNodeTransfor
 
     phraseType = PhraseType.RelativeScope;
     reference:Reference;
-    constructor(public type: string, loc:lsp.Location) {
+    constructor(public type: string, loc:HashedLocation) {
         this.reference = Reference.create(SymbolKind.Class, type, loc);
         this.reference.altName = 'static';
      }
@@ -1287,7 +1288,7 @@ class SimpleVariableTransform implements TypeNodeTransform, ReferenceNodeTransfo
     reference: Reference;
     private _varTable: VariableTable;
 
-    constructor(loc: lsp.Location, varTable: VariableTable) {
+    constructor(loc: HashedLocation, varTable: VariableTable) {
         this._varTable = varTable;
         this.reference = Reference.create(SymbolKind.Variable, '', loc);
     }
@@ -1310,7 +1311,7 @@ class FullyQualifiedNameTransform implements TypeNodeTransform, ReferenceNodeTra
     phraseType = PhraseType.FullyQualifiedName;
     reference: Reference;
 
-    constructor(symbolKind: SymbolKind, loc: lsp.Location) {
+    constructor(symbolKind: SymbolKind, loc: HashedLocation) {
         this.reference = Reference.create(symbolKind, '', loc);
     }
 
@@ -1334,7 +1335,7 @@ class QualifiedNameTransform implements TypeNodeTransform, ReferenceNodeTransfor
     reference: Reference;
     private _nameResolver: NameResolver;
 
-    constructor(symbolKind: SymbolKind, loc: lsp.Location, nameResolver: NameResolver) {
+    constructor(symbolKind: SymbolKind, loc: HashedLocation, nameResolver: NameResolver) {
         this.reference = Reference.create(symbolKind, '', loc);
         this._nameResolver = nameResolver;
     }
@@ -1367,7 +1368,7 @@ class RelativeQualifiedNameTransform implements TypeNodeTransform, ReferenceNode
     reference: Reference;
     private _nameResolver: NameResolver;
 
-    constructor(symbolKind: SymbolKind, loc: lsp.Location, nameResolver: NameResolver) {
+    constructor(symbolKind: SymbolKind, loc: HashedLocation, nameResolver: NameResolver) {
         this.reference = Reference.create(symbolKind, '', loc);
         this._nameResolver = nameResolver;
     }
@@ -1391,7 +1392,7 @@ class MemberNameTransform implements ReferenceNodeTransform {
     phraseType = PhraseType.MemberName;
     reference: Reference;
 
-    constructor(loc: lsp.Location) {
+    constructor(loc: HashedLocation) {
         this.reference = Reference.create(SymbolKind.None, '', loc);
     }
 
@@ -1408,7 +1409,7 @@ class ScopedMemberNameTransform implements ReferenceNodeTransform {
     phraseType = PhraseType.ScopedMemberName;
     reference: Reference;
 
-    constructor(loc: lsp.Location) {
+    constructor(loc: HashedLocation) {
         this.reference = Reference.create(SymbolKind.None, '', loc);
     }
 
@@ -1426,7 +1427,7 @@ class ScopedMemberNameTransform implements ReferenceNodeTransform {
 class IdentifierTransform implements TextNodeTransform {
     phraseType = PhraseType.Identifier;
     text = '';
-    location: lsp.Location;
+    location: HashedLocation;
 
     push(transform: NodeTransform) {
         this.text = (<TokenTransform>transform).text;
