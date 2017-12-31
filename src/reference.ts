@@ -4,21 +4,21 @@
 
 'use strict';
 
-import { Predicate, TreeVisitor, TreeTraverser, NameIndex, Traversable, SortedList, NameIndexNode } from './types';
+import { Predicate, TreeVisitor, TreeTraverser, NameIndex, Traversable, SortedList, NameIndexNode, HashedLocation } from './types';
 import { SymbolIdentifier, SymbolKind } from './symbol';
 import { Range, Location, Position } from 'vscode-languageserver-types';
 import * as util from './util';
 import { FileCache, Cache } from './cache';
 import { Log } from './logger';
+import * as uriMap from './uriMap';
 
 export interface Reference extends SymbolIdentifier {
-    location: Location;
     type?: string;
     altName?: string;
 }
 
 export namespace Reference {
-    export function create(kind: SymbolKind, name: string, location: Location): Reference {
+    export function create(kind: SymbolKind, name: string, location: HashedLocation): Reference {
         return {
             kind: kind,
             name: name,
@@ -116,94 +116,81 @@ export interface ReferenceTableSummary {
     identifiers: string[];
 }
 
-namespace ReferenceTableSummary {
-    export function fromTable(table: ReferenceTable) {
-        return (<ReferenceTableSummaryVisitor>table.traverse(new ReferenceTableSummaryVisitor(table.uri))).referenceTableSummary;
-    }
-
-    export function create(uri: string, identifiers: string[]) {
-        return {
-            uri: uri,
-            identifiers: identifiers
-        };
-    }
-
-    var collator = new Intl.Collator('en');
-    export function compare(a: ReferenceTableSummary, b: ReferenceTableSummary) {
-        return collator.compare(a.uri, b.uri);
-    }
-
-    export function keys(x: ReferenceTableSummary) {
-        return x.identifiers;
-    }
-
-    export function uriCompareFn(uri: string) {
-        return (x: ReferenceTableSummary) => {
-            return collator.compare(x.uri, uri);
-        }
-    }
-
-}
-
 export class ReferenceStore {
 
-    private _tables: ReferenceTable[];
-    private _nameIndex: NameIndex<ReferenceTableSummary>;
-    private _summaryIndex: SortedList<ReferenceTableSummary>;
+    private _inMemoryTables: {[uri:string]:ReferenceTable};
+    private _nameIndex: NameIndex<number>;
     private _cache: Cache;
 
     constructor(cache: Cache) {
-        this._nameIndex = new NameIndex<ReferenceTableSummary>(ReferenceTableSummary.keys);
-        this._summaryIndex = new SortedList<ReferenceTableSummary>(ReferenceTableSummary.compare);
-        this._tables = [];
+        this._nameIndex = new NameIndex<number>();
+        this._inMemoryTables = {};
         this._cache = cache;
     }
 
-    *knownDocuments() {
-        let items = this._summaryIndex.items;
-        for(let n = 0, l = items.length; n < l; ++n) {
-            yield items[n].uri;
-        }
+    /**
+     * Only fetches in memory tables
+     * @param uri 
+     */
+    getInMemoryTable(uri: string) {
+        let id = uriMap.id(uri);
+        return this._inMemoryTables[id];
     }
 
-    getReferenceTable(uri: string) {
-        return util.find<ReferenceTable>(this._tables, (t) => { return t.uri === uri; });
+    getInMemoryTables() {
+        let tables = this._inMemoryTables;
+        return Object.keys(tables).map(k => {
+            return tables[k];
+        });
     }
 
     add(table: ReferenceTable) {
-        if (this.getReferenceTable(table.uri) || this._summaryIndex.find(ReferenceTableSummary.uriCompareFn(table.uri))) {
-            this.remove(table.uri);
+        let uriId = uriMap.id(table.uri);
+        if(this._inMemoryTables[uriId]) {
+            throw new Error('Duplicate Key' + table.uri);
         }
-        this._tables.push(table);
-        let summary = ReferenceTableSummary.fromTable(table);
-        this._summaryIndex.add(summary);
-        this._nameIndex.add(summary);
+        this._inMemoryTables[uriId] = table;
+        let identifiers = (<IndexableReferenceIdentifiersVisitor>table.traverse(new IndexableReferenceIdentifiersVisitor())).identifiers;
+        this._nameIndex.add(uriId, identifiers);
     }
 
-    remove(uri: string, purge?: boolean) {
-        this._tablesRemove(uri);
-        let summary = this._summaryRemove(uri);
-        if (!summary) {
+    remove(table:ReferenceTable, purge?: boolean) {
+        let uriId = uriMap.id(table.uri);
+        if(uriId === undefined) {
             return;
         }
-        this._nameIndex.remove(summary);
+        delete this._inMemoryTables[uriId];
+        let identifiers = (<IndexableReferenceIdentifiersVisitor>table.traverse(new IndexableReferenceIdentifiersVisitor())).identifiers;
+        this._nameIndex.remove(uriId, identifiers);
         if (purge) {
-            this._cache.delete(uri);
+            this._cache.delete(uriId.toString());
         }
+    }
+
+    open(uri: string) {
+        let inMem = this._inMemoryTables;
+        let uriId = uriMap.id(uri);
+        return this._fetchTable(uriId).then(t => {
+            if(t) {
+                inMem[uriId] = t;
+            }
+            return t;
+        });
     }
 
     close(uri: string) {
-        let table = this._tablesRemove(uri);
+        let uriId = uriMap.id(uri);
+        let table = this._inMemoryTables[uriId];
         if (table) {
-            return this._cache.write(table.uri, table.root).catch((msg) => { Log.error(msg) });
+            return this._cache.write(uriId.toString(), table).catch((msg) => { Log.error(msg) });
         }
         return Promise.resolve();
     }
 
     closeAll() {
-        let tables = this._tables;
+        let tables = this.getInMemoryTables();
         let cache = this._cache;
-        this._tables = [];
+        this._inMemoryTables = {};
         let count = tables.length;
 
         return new Promise<void>((resolve, reject) => {
@@ -222,7 +209,7 @@ export class ReferenceStore {
             let writeTableFn = () => {
                 let table = tables.pop();
                 if (table) {
-                    cache.write(table.uri, table).then(onResolve).catch(onReject);
+                    cache.write(uriMap.id(table.uri).toString(), table).then(onResolve).catch(onReject);
                 } else if (count < 1) {
                     resolve();
                 }
@@ -243,9 +230,9 @@ export class ReferenceStore {
             return Promise.resolve<Reference[]>([]);
         }
 
-        //find uris that contain ref matching name
-        let summaries = this._nameIndex.find(name);
-        let count = summaries.length;
+        //find uriIds that contain ref matching name
+        let ids = this._nameIndex.find(name);
+        let count = ids.length;
         if (!count) {
             return Promise.resolve<Reference[]>([]);
         }
@@ -270,34 +257,28 @@ export class ReferenceStore {
                 if (count < 1) {
                     resolve(findInTablesFn(tables, name, filter));
                 } else {
-                    let summary = summaries.pop();
-                    if (summary) {
-                        fetchTableFn(summary.uri).then(onSuccess).catch(onFail);
+                    let id = ids.pop();
+                    if (id) {
+                        fetchTableFn(id).then(onSuccess).catch(onFail);
                     }
                 }
             }
 
-            let maxOpenFiles = Math.min(4, summaries.length);
+            let maxOpenFiles = Math.min(4, ids.length);
             while (maxOpenFiles--) {
-                fetchTableFn(summaries.pop().uri).then(onSuccess).catch(onFail);
+                fetchTableFn(ids.pop()).then(onSuccess).catch(onFail);
             }
 
         });
 
     }
 
-    fromJSON(data:ReferenceTableSummary[]) {
-        this._summaryIndex = new SortedList<ReferenceTableSummary>(ReferenceTableSummary.compare, data);
-        let items = this._summaryIndex.items;
-        let item:ReferenceTableSummary;
-        for(let n = 0; n < items.length; ++n) {
-            item = items[n];
-            this._nameIndex.add(item);
-        }
+    fromJSON(data:NameIndexNode<number>[]) {
+        this._nameIndex.restore(data);
     }
 
     toJSON() {
-        return this._summaryIndex.items;
+        return this._nameIndex;
     }
 
     private _findInTables(tables: ReferenceTable[], name: string, filter?: Predicate<Reference>) {
@@ -326,30 +307,19 @@ export class ReferenceStore {
 
     }
 
-    private _fetchTable = (uri: string) => {
-        let findOpenTableFn = (t) => { return t.uri === uri };
-        let table = this.getReferenceTable(uri);
+    private _fetchTable = (uriId: number):Promise<ReferenceTable> => {
+        let table = this._inMemoryTables[uriId];
 
         if (table) {
             return Promise.resolve<ReferenceTable>(table);
         } else {
-            return this._cache.read(uri).then((obj) => {
-                return Promise.resolve<ReferenceTable>(new ReferenceTable(uri, obj));
+            return this._cache.read(uriId.toString()).then((obj) => {
+                return new ReferenceTable(obj._uri, obj._root);
+            }).catch(err => {
+                Log.error(err);
+                return undefined;
             });
         }
-    }
-
-    private _tablesRemove(uri: string) {
-        let index = this._tables.findIndex((t) => { return t.uri === uri; });
-        if (index > -1) {
-            return this._tables.splice(index, 1).shift();
-        }
-        return undefined;
-    }
-
-    private _summaryRemove(uri: string) {
-        let cmpFn = ReferenceTableSummary.uriCompareFn(uri);
-        return this._summaryIndex.remove(cmpFn);
     }
 
 }
@@ -380,29 +350,29 @@ class ReferencesVisitor implements TreeVisitor<Scope | Reference> {
 
 }
 
-class ReferenceTableSummaryVisitor implements TreeVisitor<Scope | Reference> {
+class IndexableReferenceIdentifiersVisitor implements TreeVisitor<Scope | Reference> {
 
-    private identifiers: Set<string>;
+    private _identifiers: Set<string>;
 
-    constructor(private uri: string) {
-        this.identifiers = new Set<string>();
+    constructor() {
+        this._identifiers = new Set<string>();
     }
 
-    get referenceTableSummary(): ReferenceTableSummary {
-        return ReferenceTableSummary.create(this.uri, Array.from(this.identifiers));
+    get identifiers() {
+        return Array.from(this._identifiers);
     }
 
     preorder(node: Scope | Reference, spine: (Scope | Reference)[]) {
         if (this._shouldIndex(node)) {
             let lcName = (<Reference>node).name.toLowerCase();
             let altName = (<Reference>node).altName;
-            if (lcName) {
-                this.identifiers.add(lcName);
+            if (lcName && lcName !== 'true' && lcName !== 'false' && lcName !== 'null') {
+                this._identifiers.add(lcName);
             }
             if (altName) {
                 let lcAltName = altName.toLowerCase();
                 if (lcAltName !== lcName && lcAltName !== 'static' && lcAltName !== 'self' && lcAltName !== 'parent') {
-                    this.identifiers.add(lcAltName);
+                    this._identifiers.add(lcAltName);
                 }
             }
         }
