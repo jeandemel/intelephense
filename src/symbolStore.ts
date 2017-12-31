@@ -6,7 +6,10 @@
 
 import { PhpSymbol, SymbolKind, SymbolModifier, SymbolIdentifier } from './symbol';
 import { Reference } from './reference';
-import { TreeTraverser, Predicate, TreeVisitor, Traversable, BinarySearch, NameIndex, HashedLocation, FindByStartPositionTraverser } from './types';
+import {
+    TreeTraverser, Predicate, TreeVisitor, Traversable, BinarySearch, NameIndex, HashedLocation, FindByStartPositionTraverser,
+    NameIndexNode
+} from './types';
 import { Position, Location, Range } from 'vscode-languageserver-types';
 import { TypeString } from './typeString';
 import * as builtInSymbols from './builtInSymbols.json';
@@ -69,7 +72,7 @@ export class SymbolTable implements Traversable<PhpSymbol> {
         return traverser.parent();
     }
 
-    traverse(visitor: TreeVisitor<PhpSymbol>) {
+    traverse<T extends TreeVisitor<PhpSymbol>>(visitor: T) {
         let traverser = new TreeTraverser([this.root]);
         traverser.traverse(visitor);
         return visitor;
@@ -136,7 +139,7 @@ export class SymbolTable implements Traversable<PhpSymbol> {
         return (s.kind & mask) > 0;
     }
 
-    static fromJSON(data: any) {
+    static fromData(data: any) {
         return new SymbolTable(data._uri, data._root);
     }
 
@@ -157,6 +160,7 @@ export class SymbolTable implements Traversable<PhpSymbol> {
         return new SymbolTable(builtInsymbolsUri, {
             kind: SymbolKind.None,
             name: '',
+            location: HashedLocation.create(0, Range.create(0, 0, 1000000, 1000000)),
             children: <any>builtInSymbols
         });
 
@@ -183,19 +187,19 @@ class ScopedVariablePruneVisitor implements TreeVisitor<PhpSymbol> {
 }
 
 export interface HashedStartLocation {
-    uriHash:number;
-    start:Position;
+    uriHash: number;
+    start: Position;
 }
 
 export class SymbolStore {
 
-    private _tableIndex: {[id:number]: SymbolTable};
-    private _symbolIndex: NameIndex<PhpSymbol>;
+    private _tableIndex: { [id: number]: SymbolTable };
+    private _symbolIndex: NameIndex<HashedStartLocation>;
     private _symbolCount: number;
 
     constructor() {
         this._tableIndex = {};
-        this._symbolIndex = new NameIndex<PhpSymbol>();
+        this._symbolIndex = new NameIndex<HashedStartLocation>();
         this._symbolCount = 0;
     }
 
@@ -207,10 +211,6 @@ export class SymbolStore {
 
     getSymbolTable(uri: string) {
         return this._tableIndex[uriMap.id(uri)];
-    }
-
-    get tables() {
-        return this._tableIndex.tables();
     }
 
     get tableCount() {
@@ -228,7 +228,7 @@ export class SymbolStore {
         this._tableIndex[id] = symbolTable;
         let indexItems = symbolTable.traverse(new IndexableSymbolVisitor(id)).items;
         for (let n = 0; n < indexItems.length; ++n) {
-            this._symbolIndex.add(indexItems[n].packedStartLocation, indexItems[n].keys);
+            this._symbolIndex.add(indexItems[n].start, indexItems[n].keys);
         }
         this._symbolCount += symbolTable.symbolCount;
     }
@@ -242,7 +242,7 @@ export class SymbolStore {
         delete this._tableIndex[id];
         let indexItems = symbolTable.traverse(new IndexableSymbolVisitor(id)).items;
         for (let n = 0; n < indexItems.length; ++n) {
-            this._symbolIndex.remove(indexItems[n].packedStartLocation, indexItems[n].keys);
+            this._symbolIndex.remove(indexItems[n].start, indexItems[n].keys);
         }
         this._symbolCount -= symbolTable.symbolCount;
     }
@@ -251,16 +251,19 @@ export class SymbolStore {
         return {
             _tableIndex: this._tableIndex,
             _symbolCount: this._symbolCount,
-            _symbolIndex: this._symbolIndex
+            _symbolIndex: this._symbolIndex.toJSON()
         }
     }
 
-    fromJSON(data:any) {
+    restore(data: any) {
         this._symbolCount = data._symbolCount;
-        this._tableIndex.fromJSON(data._tableIndex);
-        for (let t of this._tableIndex.tables()) {
-            this._symbolIndex.addMany(this._indexSymbols(t.root));
+        this._tableIndex = {};
+        let tableKeys = Object.keys(data._tableIndex);
+        let table: SymbolTable;
+        for (let n = 0, l = tableKeys.length; n < l; ++n) {
+            this._tableIndex[tableKeys[n]] = SymbolTable.fromData(data._tableIndex[tableKeys[n]]);
         }
+        this._symbolIndex.restore(data._symbolIndex);
     }
 
     /**
@@ -278,7 +281,7 @@ export class SymbolStore {
 
         let lcText = text.toLowerCase();
         let kindMask = SymbolKind.Constant | SymbolKind.Variable;
-        let result = this._symbolIndex.find(text);
+        let result = this._indexResultToSymbols(this._symbolIndex.find(text));
         let symbols: PhpSymbol[] = [];
         let s: PhpSymbol;
 
@@ -304,7 +307,7 @@ export class SymbolStore {
             return [];
         }
 
-        let matches: PhpSymbol[] = this._symbolIndex.match(text);
+        let matches: PhpSymbol[] = this._indexResultToSymbols(this._symbolIndex.match(text));
 
         if (!filter) {
             return matches;
@@ -495,7 +498,7 @@ export class SymbolStore {
     */
 
     symbolLocation(symbol: PhpSymbol): Location {
-        let table = this._tableIndex.findBySymbol(symbol);
+        let table = this._tableIndex[symbol.location.uriHash];
         return table ? Location.create(table.uri, symbol.location.range) : undefined;
     }
 
@@ -529,23 +532,23 @@ export class SymbolStore {
         }
     }
 
-    private _indexResultToSymbols(results:HashedStartLocation[]) {
+    private _indexResultToSymbols(results: HashedStartLocation[]) {
 
         let table: SymbolTable;
         let finder = new FindByStartPositionTraverser();
-        let symbols: PhpSymbol[] = [];
-        let s:PhpSymbol;
-        let item:HashedStartLocation;
+        let symbols = new Set<PhpSymbol>();
+        let s: PhpSymbol;
+        let item: HashedStartLocation;
 
         for (let n = 0, l = results.length; n < l; ++n) {
             item = results[n];
             table = this._tableIndex[item.uriHash];
-            if((s = <PhpSymbol>finder.find(item.start, table.root))) {
-                symbols.push(s);
+            if ((s = <PhpSymbol>finder.find(item.start, table.root))) {
+                symbols.add(s);
             }
         }
 
-        return symbols;
+        return Array.from(symbols);
 
     }
 
@@ -734,8 +737,8 @@ class ContainsVisitor implements TreeVisitor<PhpSymbol> {
 }
 
 interface KeyedHashedStartLocation {
-    keys:string[];
-    start:HashedStartLocation;
+    keys: string[];
+    start: HashedStartLocation;
 }
 
 namespace KeyedHashedStartLocation {
@@ -752,7 +755,7 @@ namespace KeyedHashedStartLocation {
         return PhpSymbol.keys(s);
     }
 
-    export function create(s:PhpSymbol) {
+    export function create(s: PhpSymbol) {
         return <KeyedHashedStartLocation>{
             keys: keys(s),
             start: {
