@@ -213,6 +213,10 @@ export class SymbolStore {
         return this._tableIndex[uriMap.id(uri)];
     }
 
+    getSymbolTableById(id:number) {
+        return this._tableIndex[id];
+    }
+
     get tableCount() {
         return Object.keys(this._tableIndex).length;
     }

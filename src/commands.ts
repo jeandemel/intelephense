@@ -28,7 +28,7 @@ export class NameTextEditProvider {
         let edits:TextEdit[] = [];
         let doc = this.docStore.find(uri);
         let table = this.symbolStore.getSymbolTable(uri);
-        let refTable = this.refStore.getReferenceTable(uri);
+        let refTable = this.refStore.getInMemoryTable(uri);
         if(!doc || !table || !refTable || !this._fullyQualifiedNamePhrase(position, doc, table, refTable)) {
             return edits;
         }

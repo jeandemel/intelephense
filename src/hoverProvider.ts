@@ -22,7 +22,7 @@ export class HoverProvider {
 
 
         let doc = this.docStore.find(uri);
-        let table = this.refStore.getReferenceTable(uri);
+        let table = this.refStore.getInMemoryTable(uri);
 
         if (!doc || !table) {
             return undefined;

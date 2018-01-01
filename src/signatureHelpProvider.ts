@@ -24,7 +24,7 @@ export class SignatureHelpProvider {
 
         let doc = this.docStore.find(uri);
         let table = this.symbolStore.getSymbolTable(uri);
-        let refTable = this.refStore.getReferenceTable(uri);
+        let refTable = this.refStore.getInMemoryTable(uri);
         if (!doc || !table || !refTable) {
             return null;
         }
