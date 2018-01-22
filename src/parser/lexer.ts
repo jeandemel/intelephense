@@ -4,6 +4,8 @@
 
 'use strict';
 
+import {PackedPosition} from '../types';
+
 export const enum TokenType {
     //Misc
     Unknown,
@@ -201,22 +203,19 @@ export interface Token {
      */
     tokenType: TokenType,
     /**
-     * Offset within source were first char of token is found
+     * Packed position that borders the first char of the token
      */
-    offset: number,
+    start: number,
     /**
-     * Length of token string
+     * Packed position that borders the last char of the token
      */
-    length: number
-    /**
-     * Lexer mode prior to this token being read.
-     */
-    modeStack: LexerMode[],
+    end: number
+
 }
 
 export namespace Token {
-    export function create(type: TokenType, offset: number, length: number, modeStack: LexerMode[]): Token {
-        return { tokenType: type, offset: offset, length: length, modeStack: modeStack };
+    export function create(type: TokenType, startLine:number, startChar:number, endLine:number, endChar:number): Token {
+        return { tokenType: type, start: PackedPosition.pack(startLine, startChar), end:PackedPosition.pack(endLine, endChar)};
     }
 }
 
@@ -228,28 +227,27 @@ export namespace Lexer {
         modeStack: LexerMode[];
         doubleQuoteScannedLength: number;
         heredocLabel: string
+        line:number;
+        lineOffset:number;
     }
 
     var state: LexerState;
 
-    export function setInput(text: string, lexerModeStack?: LexerMode[], position?: number) {
+    export function setInput(text: string, lexerModeStack?: LexerMode[], position?: number, line?:number, lineOffset?:number) {
         state = {
-            position: position ? position : 0,
+            position: position || 0,
             input: text,
             modeStack: lexerModeStack ? lexerModeStack : [LexerMode.Initial],
             doubleQuoteScannedLength: -1,
-            heredocLabel: null
+            heredocLabel: null,
+            line : line || 0,
+            lineOffset: lineOffset || 0
         };
     }
 
     export function lex(): Token {
         if (state.position >= state.input.length) {
-            return {
-                tokenType: TokenType.EndOfFile,
-                offset: state.position,
-                length: 0,
-                modeStack: state.modeStack
-            };
+            return Token.create(TokenType.EndOfFile, state.line, state.position - state.lineOffset, state.line, state.position - state.lineOffset);
         }
 
         let t: Token;
@@ -304,15 +302,21 @@ export namespace Lexer {
 
     }
 
+    /**
+     * spec suggests that only extended ascii (cp > 0x7f && cp < 0x100) is valid but official lexer seems ok with all utf8
+     * @param c 
+     */
     function isLabelStart(c: string) {
         let cp = c.charCodeAt(0);
-        //spec suggests that only extended ascii (cp > 0x7f && cp < 0x100) is valid but official lexer seems ok with all utf8
         return (cp > 0x40 && cp < 0x5b) || (cp > 0x60 && cp < 0x7b) || cp === 0x5f || cp > 0x7f;
     }
 
+    /**
+     * spec suggests that only extended ascii (cp > 0x7f && cp < 0x100) is valid but official lexer seems ok with all utf8
+     * @param c 
+     */
     function isLabelChar(c: string) {
         let cp = c.charCodeAt(0);
-        //spec suggests that only extended ascii (cp > 0x7f && cp < 0x100) is valid but official lexer seems ok with all utf8
         return (cp > 0x2f && cp < 0x3a) || (cp > 0x40 && cp < 0x5b) || (cp > 0x60 && cp < 0x7b) || cp === 0x5f || cp > 0x7f;
     }
 
@@ -320,11 +324,16 @@ export namespace Lexer {
         return c === ' ' || c === '\n' || c === '\r' || c === '\t';
     }
 
+    function isNewline(c:string) {
+        return c === '\n' || c === '\r';
+    }
+
     function initial(s: LexerState): Token {
 
         let l = s.input.length;
         let c = s.input[s.position];
-        let start = s.position;
+        let line = s.line;
+        let cPos = s.position - s.lineOffset;
 
         if (c === '<' && s.position + 1 < l && s.input[s.position + 1] === '?') {
             let tokenType = TokenType.OpenTag;
@@ -333,11 +342,17 @@ export namespace Lexer {
                 s.input.substr(s.position, 5).toLowerCase() === '<?php' &&
                 s.position + 5 < l && isWhitespace(s.input[s.position + 5])
             ) {
-
-                if (s.input[s.position + 5] === '\r' && s.position + 6 < l && s.input[s.position + 6] === '\n') {
+                let ws = s.input[s.position + 5];
+                if (ws === '\r' && s.position + 6 < l && s.input[s.position + 6] === '\n') {
                     s.position += 7;
+                    ++s.line;
+                    s.lineOffset = s.position;
                 } else {
                     s.position += 6;
+                    if(isNewline(ws)) {
+                        ++s.line;
+                        s.lineOffset = s.position;
+                    }
                 }
 
             } else if (s.position + 2 < l && s.input[s.position + 2] === '=') {
@@ -348,27 +363,62 @@ export namespace Lexer {
                 s.position += 2;
             }
 
-            let t = { tokenType: tokenType, offset: start, length: s.position - start, modeStack: s.modeStack };
+            let t = Token.create(tokenType, line, cPos, s.line, s.position - s.lineOffset);
             s.modeStack = s.modeStack.slice(0, -1);
             s.modeStack.push(LexerMode.Scripting);
             return t;
         }
 
-        while (++s.position < l) {
+        while (s.position < l) {
             c = s.input[s.position];
-            if (c === '<' && s.position + 1 < l && s.input[s.position + 1] === '?') {
+            ++s.position;
+
+            if(c === '\r') {
+                if(s.input[s.position] === '\n') {
+                    ++s.position;
+                }
+                s.lineOffset = s.position;
+                ++s.line;
+            } else if(c === '\n' ) {
+                s.lineOffset = s.position;
+                ++s.line;
+            } else if (c === '<' && s.position + 1 < l && s.input[s.position + 1] === '?') {
+                --s.position;
                 break;
             }
         }
 
-        return { tokenType: TokenType.Text, offset: start, length: s.position - start, modeStack: s.modeStack };
+        return Token.create(TokenType.Text, line, cPos, s.line, s.position - s.lineOffset);
 
+    }
+
+    function whitespace(s:LexerState) {
+        let l = s.input.length;
+        let c:string;
+        let line = s.line;
+        let cPos = s.position - s.lineOffset;
+
+        while (s.position < l && isWhitespace(c = s.input[s.position])) { 
+            ++s.position;
+            if(c === '\r') {
+                if(s.input[s.position] === '\n') {
+                    ++s.position;
+                }
+                s.lineOffset = s.position;
+                ++s.line;
+            } else if(c === '\n' ) {
+                s.lineOffset = s.position;
+                ++s.line;
+            }
+        }
+        return Token.create(TokenType.Whitespace, line, cPos, s.line, s.position - s.lineOffset);
     }
 
     function scripting(s: LexerState): Token {
 
         let c = s.input[s.position];
-        let start = s.position;
+        let line = s.line;
+        let cPos = s.position - s.lineOffset;
         let l = s.input.length;
         let modeStack = s.modeStack;
 
@@ -378,8 +428,7 @@ export namespace Lexer {
             case '\t':
             case '\n':
             case '\r':
-                while (++s.position < l && isWhitespace(s.input[s.position])) { }
-                return { tokenType: TokenType.Whitespace, offset: start, length: s.position - start, modeStack: modeStack };
+                return whitespace(s);
 
             case '-':
                 return scriptingMinus(s);
@@ -387,9 +436,9 @@ export namespace Lexer {
             case ':':
                 if (++s.position < l && s.input[s.position] === ':') {
                     ++s.position;
-                    return { tokenType: TokenType.ColonColon, offset: start, length: 2, modeStack: modeStack };
+                    return Token.create(TokenType.ColonColon, line, cPos, line, cPos + 2);
                 }
-                return { tokenType: TokenType.Colon, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.Colon, line, cPos, line, cPos + 1);
 
             case '.':
                 return scriptingDot(s);
@@ -418,9 +467,9 @@ export namespace Lexer {
             case '%':
                 if (++s.position < l && s.input[s.position] === '=') {
                     ++s.position;
-                    return { tokenType: TokenType.PercentEquals, offset: start, length: 2, modeStack: modeStack };
+                    return Token.create(TokenType.PercentEquals, line, cPos, line, cPos + 2);
                 }
-                return { tokenType: TokenType.Percent, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.Percent, line, cPos, line, cPos + 1);
 
             case '&':
                 return scriptingAmpersand(s);
@@ -431,43 +480,43 @@ export namespace Lexer {
             case '^':
                 if (++s.position < l && s.input[s.position] === '=') {
                     ++s.position;
-                    return { tokenType: TokenType.CaretEquals, offset: start, length: 2, modeStack: modeStack };
+                    return Token.create(TokenType.CaretEquals, line, cPos, line, cPos + 2);
                 }
-                return { tokenType: TokenType.Caret, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.Caret, line, cPos, line, cPos + 1);
 
             case ';':
                 ++s.position;
-                return { tokenType: TokenType.Semicolon, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.Semicolon, line, cPos, line, cPos + 1);
 
             case ',':
                 ++s.position;
-                return { tokenType: TokenType.Comma, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.Comma, line, cPos, line, cPos + 1);
 
             case '[':
                 ++s.position;
-                return { tokenType: TokenType.OpenBracket, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.OpenBracket, line, cPos, line, cPos + 1);
 
             case ']':
                 ++s.position;
-                return { tokenType: TokenType.CloseBracket, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.CloseBracket, line, cPos, line, cPos + 1);
 
             case '(':
                 return scriptingOpenParenthesis(s);
 
             case ')':
                 ++s.position;
-                return { tokenType: TokenType.CloseParenthesis, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.CloseParenthesis, line, cPos, line, cPos + 1);
 
             case '~':
                 ++s.position;
-                return { tokenType: TokenType.Tilde, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.Tilde, line, cPos, line, cPos + 1);
 
             case '?':
                 return scriptingQuestion(s);
 
             case '@':
                 ++s.position;
-                return { tokenType: TokenType.AtSymbol, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.AtSymbol, line, cPos, line, cPos + 1);
 
             case '$':
                 return scriptingDollar(s);
@@ -492,20 +541,20 @@ export namespace Lexer {
                 ++s.position;
                 s.modeStack = modeStack.slice(0);
                 s.modeStack.push(LexerMode.Scripting);
-                return { tokenType: TokenType.OpenBrace, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.OpenBrace, line, cPos, line, cPos + 1);
 
             case '}':
                 ++s.position;
                 if (s.modeStack.length > 1) {
                     s.modeStack = s.modeStack.slice(0, -1);
                 }
-                return { tokenType: TokenType.CloseBrace, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.CloseBrace, line, cPos, line, cPos + 1);
 
             case '`':
                 ++s.position;
                 s.modeStack = s.modeStack.slice(0, -1);
                 s.modeStack.push(LexerMode.Backtick);
-                return { tokenType: TokenType.Backtick, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.Backtick, line, cPos, line, cPos + 1);
 
             case '\\':
                 return scriptingBackslash(s);
@@ -521,7 +570,7 @@ export namespace Lexer {
                     return scriptingLabelStart(s);
                 } else {
                     ++s.position;
-                    return { tokenType: TokenType.Unknown, offset: start, length: 1, modeStack: s.modeStack };
+                    return Token.create(TokenType.Unknown, line, cPos, line, cPos + 1);
                 }
 
         }
@@ -534,29 +583,30 @@ export namespace Lexer {
         let c = s.input[s.position];
         let l = s.input.length;
         let modeStack = s.modeStack;
+        let line = s.line;
+        let cPos = s.position - s.lineOffset;
 
         switch (c) {
             case ' ':
             case '\t':
             case '\n':
             case '\r':
-                while (++s.position < l && isWhitespace(s.input[s.position])) { }
-                return { tokenType: TokenType.Whitespace, offset: start, length: s.position - start, modeStack: modeStack };
+                return whitespace(s);
 
             default:
                 if (isLabelStart(c)) {
                     while (++s.position < l && isLabelChar(s.input[s.position])) { }
                     s.modeStack = s.modeStack.slice(0, -1);
-                    return { tokenType: TokenType.Name, offset: start, length: s.position - start, modeStack: modeStack };
+                    return Token.create(TokenType.Name, line, cPos, line, s.position - s.lineOffset);
                 }
 
                 if (c === '-' && s.position + 1 < l && s.input[s.position + 1] === '>') {
                     s.position += 2;
-                    return { tokenType: TokenType.Arrow, offset: start, length: 2, modeStack: modeStack };
+                    return Token.create(TokenType.Arrow, line, cPos, line, cPos + 2);
                 }
 
                 s.modeStack = s.modeStack.slice(0, -1);
-                return null;
+                return undefined;
         }
 
     }
@@ -568,6 +618,8 @@ export namespace Lexer {
         let start = s.position;
         let modeStack = s.modeStack;
         let t: Token;
+        let line = s.line;
+        let cPos = s.position - s.lineOffset;
 
         switch (c) {
             case '$':
@@ -581,7 +633,7 @@ export namespace Lexer {
                     s.modeStack = s.modeStack.slice(0);
                     s.modeStack.push(LexerMode.Scripting);
                     ++s.position;
-                    return { tokenType: TokenType.CurlyOpen, offset: start, length: 1, modeStack: modeStack };
+                    return Token.create(TokenType.CurlyOpen, line, cPos, line, cPos + 1);
                 }
                 break;
 
@@ -589,7 +641,7 @@ export namespace Lexer {
                 s.modeStack = s.modeStack.slice(0, -1);
                 s.modeStack.push(LexerMode.Scripting);
                 ++s.position;
-                return { tokenType: TokenType.DoubleQuote, offset: start, length: 1, modeStack: modeStack };
+                return Token.create(TokenType.DoubleQuote, line, cPos, line, cPos + 1);
 
             default:
                 break;
@@ -607,6 +659,8 @@ export namespace Lexer {
         let l = s.input.length;
         let c: string;
         let modeStack = s.modeStack;
+        let line = s.line;
+        let cPos = s.position - s.lineOffset;
 
         while (n < l) {
             c = s.input[n++];
