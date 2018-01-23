@@ -227,19 +227,30 @@ export namespace Lexer {
         input: string;
         modeStack: LexerMode[];
         doubleQuoteScannedLength: number;
-        heredocLabel: string
+        heredocLabel: string,
+        lineOffsets: number[]
     }
 
     var state: LexerState;
 
-    export function setInput(text: string, lexerModeStack?: LexerMode[], position?: number) {
+    export function setInput(text: string, lexerModeStack?: LexerMode[], position?: number, lineOffset?: number) {
         state = {
             position: position ? position : 0,
             input: text,
             modeStack: lexerModeStack ? lexerModeStack : [LexerMode.Initial],
             doubleQuoteScannedLength: -1,
-            heredocLabel: null
+            heredocLabel: null,
+            lineOffsets: lineOffset ? [lineOffset] : [0]
         };
+    }
+
+    export function lineOffsets() {
+        return state.lineOffsets;
+    }
+
+    export function lastLineOffset() : [number, number] {
+        let line = state.lineOffsets.length - 1;
+        return [line, state.lineOffsets[line]];
     }
 
     export function lex(): Token {
@@ -304,15 +315,21 @@ export namespace Lexer {
 
     }
 
+    /**
+     * spec suggests that only extended ascii (cp > 0x7f && cp < 0x100) is valid but official lexer seems ok with all utf8
+     * @param c 
+     */
     function isLabelStart(c: string) {
         let cp = c.charCodeAt(0);
-        //spec suggests that only extended ascii (cp > 0x7f && cp < 0x100) is valid but official lexer seems ok with all utf8
         return (cp > 0x40 && cp < 0x5b) || (cp > 0x60 && cp < 0x7b) || cp === 0x5f || cp > 0x7f;
     }
 
+    /**
+     * spec suggests that only extended ascii (cp > 0x7f && cp < 0x100) is valid but official lexer seems ok with all utf8
+     * @param c 
+     */
     function isLabelChar(c: string) {
         let cp = c.charCodeAt(0);
-        //spec suggests that only extended ascii (cp > 0x7f && cp < 0x100) is valid but official lexer seems ok with all utf8
         return (cp > 0x2f && cp < 0x3a) || (cp > 0x40 && cp < 0x5b) || (cp > 0x60 && cp < 0x7b) || cp === 0x5f || cp > 0x7f;
     }
 
@@ -333,9 +350,13 @@ export namespace Lexer {
                 s.input.substr(s.position, 5).toLowerCase() === '<?php' &&
                 s.position + 5 < l && isWhitespace(s.input[s.position + 5])
             ) {
-
-                if (s.input[s.position + 5] === '\r' && s.position + 6 < l && s.input[s.position + 6] === '\n') {
+                let ws = s.input[s.position + 5];
+                if (ws === '\r' && s.position + 6 < l && s.input[s.position + 6] === '\n') {
                     s.position += 7;
+                    s.lineOffsets.push(s.position);
+                } else if(ws === '\r' || ws === '\n') {
+                    s.position += 6;
+                    s.lineOffsets.push(s.position);
                 } else {
                     s.position += 6;
                 }
@@ -354,14 +375,45 @@ export namespace Lexer {
             return t;
         }
 
-        while (++s.position < l) {
+        while (s.position < l) {
             c = s.input[s.position];
-            if (c === '<' && s.position + 1 < l && s.input[s.position + 1] === '?') {
+            ++s.position;
+            if (c === '<' && s.position < l && s.input[s.position] === '?') {
+                --s.position;
                 break;
+            } else if(c === '\n') {
+                s.lineOffsets.push(s.position);
+            } else if(c === '\r') {
+                if(s.position < l && s.input[s.position] === '\n') {
+                    ++s.position;
+                }
+                s.lineOffsets.push(s.position);
             }
         }
 
         return { tokenType: TokenType.Text, offset: start, length: s.position - start, modeStack: s.modeStack };
+
+    }
+
+    function whitespace(s: LexerState) : Token {
+
+        let c:string;
+        let start = s.position;
+        let l = s.input.length;
+        let modeStack = s.modeStack;
+
+        while (s.position < l && isWhitespace(c = s.input[s.position])) { 
+            ++s.position;
+            if(c === '\n') {
+                s.lineOffsets.push(s.position);
+            } else if(c === '\r') {
+                if(s.position < l && s.input[s.position] === '\n') {
+                    ++s.position;
+                }
+                s.lineOffsets.push(s.position);
+            }
+        }
+        return { tokenType: TokenType.Whitespace, offset: start, length: s.position - start, modeStack: modeStack };
 
     }
 
@@ -378,8 +430,7 @@ export namespace Lexer {
             case '\t':
             case '\n':
             case '\r':
-                while (++s.position < l && isWhitespace(s.input[s.position])) { }
-                return { tokenType: TokenType.Whitespace, offset: start, length: s.position - start, modeStack: modeStack };
+                return whitespace(s);
 
             case '-':
                 return scriptingMinus(s);
@@ -540,8 +591,7 @@ export namespace Lexer {
             case '\t':
             case '\n':
             case '\r':
-                while (++s.position < l && isWhitespace(s.input[s.position])) { }
-                return { tokenType: TokenType.Whitespace, offset: start, length: s.position - start, modeStack: modeStack };
+                return whitespace(s);
 
             default:
                 if (isLabelStart(c)) {
@@ -641,6 +691,7 @@ export namespace Lexer {
 
                         }
                     }
+                    s.lineOffsets.push(n);
                 /* fall through */
                 default:
                     continue;
@@ -793,8 +844,7 @@ export namespace Lexer {
 
         s.modeStack = s.modeStack.slice(0, -1);
         s.modeStack.push(LexerMode.Scripting);
-        return null;
-
+        return undefined;
 
     }
 
@@ -821,7 +871,6 @@ export namespace Lexer {
 
         while (++s.position < l && s.input[s.position] >= '0' && s.input[s.position] <= '9') { }
         return { tokenType: TokenType.IntegerLiteral, offset: start, length: s.position - start, modeStack: s.modeStack };
-
 
     }
 
@@ -851,8 +900,16 @@ export namespace Lexer {
                         break;
                     }
                     continue;
+                case '\r':
+                    if(n < l && s.input[n] === '\n') {
+                        ++n;
+                    }
+                    /* fall through */
+                case '\n':
+                    s.lineOffsets.push(n);
+                    continue;
                 case '\\':
-                    if (n < l) {
+                    if (n < l && s.input[n] !== '\r' && s.input[n] !== '\n') {
                         ++n;
                     }
                 /* fall through */
@@ -908,6 +965,7 @@ export namespace Lexer {
                             return { tokenType: TokenType.EncapsulatedAndWhitespace, offset: start, length: s.position - start, modeStack: modeStack };
                         }
                     }
+                    s.lineOffsets.push(n);
                     continue;
                 case '$':
                     if (n < l && (isLabelStart(s.input[n]) || s.input[n] === '{')) {
@@ -940,10 +998,13 @@ export namespace Lexer {
 
         let start = s.position;
         //consume ws
-        while (++s.position < s.input.length && (s.input[s.position] === '\r' || s.input[s.position] === '\n')) { }
-
+        ++s.position;
+        if(s.position < s.input.length && s.input[s.position] === '\n') {
+            ++s.position;
+        }
+        s.lineOffsets.push(s.position);
         s.position += s.heredocLabel.length;
-        s.heredocLabel = null;
+        s.heredocLabel = undefined;
         let t = { tokenType: TokenType.EndHeredoc, offset: start, length: s.position - start, modeStack: s.modeStack };
         s.modeStack = s.modeStack.slice(0, -1);
         s.modeStack.push(LexerMode.Scripting);
@@ -985,8 +1046,16 @@ export namespace Lexer {
                             break;
                         }
                         continue;
+                    case '\r':
+                        if(n < l && s.input[n] === '\n') {
+                            ++n;
+                        }
+                        /* fall through */
+                    case '\n':
+                        s.lineOffsets.push(n);
+                        continue;
                     case '\\':
-                        if (n < l) {
+                        if (n < l && s.input[n] !== '\n' && s.input[n] !== '\r') {
                             ++n;
                         }
                     /* fall through */
@@ -1013,7 +1082,7 @@ export namespace Lexer {
         let modeStack = s.modeStack;
 
         if (k >= l) {
-            return null;
+            return undefined;
         }
 
         if (s.input[k] === '{') {
@@ -1024,7 +1093,7 @@ export namespace Lexer {
         }
 
         if (!isLabelStart(s.input[k])) {
-            return null;
+            return undefined;
         }
 
         while (++k < l && isLabelChar(s.input[k])) { }
