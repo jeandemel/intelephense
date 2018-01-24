@@ -1584,9 +1584,26 @@ export namespace Lexer {
         let k = s.position;
 
         if (k < l && isWhitespace(s.input[k])) {
-            while (++k < l && isWhitespace(s.input[k])) { }
+            let lineOffsets = [];
+            let c:string;
+            
+            while (k < l && isWhitespace(c = s.input[k])) { 
+                ++k;
+                if(c === '\n') {
+                    lineOffsets.push(k);
+                } else if(c === '\r') {
+                    if(k < l && s.input[k] === '\n') {
+                        ++k;
+                    }
+                    lineOffsets.push(k);
+                }
+            }
+
             if (s.input.substr(k, 4).toLowerCase() === 'from') {
                 s.position = k + 4;
+                if(lineOffsets.length > 0) {
+                    Array.prototype.push.apply(s.lineOffsets, lineOffsets);
+                }
                 return { tokenType: TokenType.YieldFrom, offset: start, length: s.position - start, modeStack: s.modeStack };
             }
 
