@@ -1146,8 +1146,16 @@ export namespace Lexer {
                         break;
                     }
                     continue;
+                case '\r':
+                    if (n < l && s.input[n] === '\n') {
+                        ++n;
+                    }
+                /* fall through */
+                case '\n':
+                    s.lineOffsets.push(n);
+                    continue;
                 case '\\':
-                    if (n < l) {
+                    if (n < l && s.input[n] !== '\n' && s.input[n] !== '\r') {
                         ++n;
                     }
                 /* fall through */
@@ -1171,21 +1179,28 @@ export namespace Lexer {
         //optional \ already consumed
         //find first unescaped '
         let l = s.input.length;
+        let c: string;
         ++s.position;
-        while (true) {
-            if (s.position < l) {
-                if (s.input[s.position] === '\'') {
-                    ++s.position;
-                    break;
-                } else if (s.input[s.position++] === '\\' && s.position < l) {
+        while (s.position < l) {
+            c = s.input[s.position];
+            ++s.position;
+
+            if (c === '\'') {
+                ++s.position;
+                return { tokenType: TokenType.StringLiteral, offset: start, length: s.position - start, modeStack: s.modeStack };
+            } else if (c === '\\' && s.position < l && s.input[s.position] !== '\r' && s.input[s.position] !== '\n') {
+                ++s.position;
+            } else if (c === '\r') {
+                if (s.position < l && s.input[s.position] === '\n') {
                     ++s.position;
                 }
-            } else {
-                return { tokenType: TokenType.EncapsulatedAndWhitespace, offset: start, length: s.position - start, modeStack: s.modeStack };
+                s.lineOffsets.push(s.position);
+            } else if (c === '\n') {
+                s.lineOffsets.push(s.position);
             }
         }
 
-        return { tokenType: TokenType.StringLiteral, offset: start, length: s.position - start, modeStack: s.modeStack };
+        return { tokenType: TokenType.EncapsulatedAndWhitespace, offset: start, length: s.position - start, modeStack: s.modeStack };
     }
 
     function scriptingBackslash(s: LexerState): Token {
@@ -1231,7 +1246,7 @@ export namespace Lexer {
 
         for (let kPlus3 = k + 3; k < kPlus3; ++k) {
             if (k >= l || s.input[k] !== '<') {
-                return null;
+                return undefined;
             }
         }
 
@@ -1250,7 +1265,7 @@ export namespace Lexer {
         if (k < l && isLabelStart(s.input[k])) {
             while (++k < l && isLabelChar(s.input[k])) { }
         } else {
-            return null;
+            return undefined;
         }
 
         labelEnd = k;
@@ -1259,7 +1274,7 @@ export namespace Lexer {
             if (k < l && s.input[k] === quote) {
                 ++k;
             } else {
-                return null;
+                return undefined;
             }
         }
 
@@ -1272,11 +1287,12 @@ export namespace Lexer {
             } else if (s.input[k] === '\n') {
                 ++k;
             } else {
-                return null;
+                return undefined;
             }
         }
 
         s.position = k;
+        s.lineOffsets.push(k);
         s.heredocLabel = s.input.slice(labelStart, labelEnd);
         let t = { tokenType: TokenType.StartHeredoc, offset: start, length: s.position - start, modeStack: s.modeStack };
         s.modeStack = s.modeStack.slice(0, -1);
