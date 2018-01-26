@@ -393,7 +393,8 @@ export namespace Parser {
 
     function error(children:(Phrase|Token)[], unexpected:Token, expected?:TokenType):ParseError {
         
-        //prefer the child range then the unexpected token range
+        //prefer the child range then the unexpected token start range
+        //ie if no tokens are skipped then this node is empty and start === end
         let start:number;
         let end:number;
 
@@ -405,7 +406,7 @@ export namespace Parser {
             end = Lexer.tokenPackedRange(last as Token)[1];
 
         } else {
-            [start, end] = Lexer.tokenPackedRange(unexpected);
+            start = end = Lexer.tokenPackedRange(unexpected)[0];
         }
 
         return Phrase.createParseError(start, end, children, unexpected, expected);
