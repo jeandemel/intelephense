@@ -317,21 +317,21 @@ export namespace Parser {
     function optional(tokenType: TokenType) {
 
         if (tokenType === peek().tokenType) {
-            errorPhrase = null;
+            errorPhrase = undefined;
             return next();
         } else {
-            return null;
+            return undefined;
         }
 
     }
 
     function optionalOneOf(tokenTypes: TokenType[]) {
 
-        if (tokenTypes.indexOf(peek().tokenType) >= 0) {
-            errorPhrase = null;
+        if (tokenTypes.indexOf(peek().tokenType) > -1) {
+            errorPhrase = undefined;
             return next();
         } else {
-            return null;
+            return undefined;
         }
 
     }
@@ -404,13 +404,13 @@ export namespace Parser {
 
     }
 
-    function peek(n?: number) {
+    function peek(n?: number, allowDocComment?:boolean) {
 
-        let k = n ? n + 1 : 1;
+        n = n ? n + 1 : 1;
         let bufferPos = -1;
         let t: Token;
 
-        while (true) {
+        do {
             
             ++bufferPos;
             if (bufferPos === tokenBuffer.length) {
@@ -419,16 +419,12 @@ export namespace Parser {
 
             t = tokenBuffer[bufferPos];
 
-            if (t.tokenType < TokenType.Comment) {
+            if (t.tokenType < TokenType.Comment || (allowDocComment && t.tokenType === TokenType.DocumentComment)) {
                 //not a hidden token
-                --k;
+                --n;
             }
 
-            if (t.tokenType === TokenType.EndOfFile || k === 0) {
-                break;
-            }
-
-        }
+        } while(t.tokenType !== TokenType.EndOfFile && n > 0);
 
         return t;
     }
@@ -527,16 +523,7 @@ export namespace Parser {
         skip(predicate);
 
     }
-/*
-    function isListPhrase(phraseType: PhraseType) {
-        switch (phraseType) {
-            case PhraseType.StatementList:
-                return true;
-            default:
-                false;
-        }
-    }
-*/
+
     function statementList(breakOn: TokenType[]) {
 
         return list(
@@ -549,19 +536,20 @@ export namespace Parser {
     }
 
     function constDeclaration() {
-
-        let p = start(PhraseType.ConstDeclaration);
-        next(); //const
-        p.children.push(delimitedList(
-            PhraseType.ConstElementList,
-            constElement,
-            isConstElementStartToken,
-            TokenType.Comma,
-            [TokenType.Semicolon]
-        ));
-        expect(TokenType.Semicolon);
-        return end();
-
+        return {
+            phraseType: PhraseType.ConstDeclaration,
+            children: [
+                next(), //const
+                delimitedList(
+                    PhraseType.ConstElementList,
+                    constElement,
+                    isConstElementStartToken,
+                    TokenType.Comma,
+                    [TokenType.Semicolon]
+                ), 
+                expect(TokenType.Semicolon)
+            ]
+        };
     }
 
     function isClassConstElementStartToken(t: Token) {
