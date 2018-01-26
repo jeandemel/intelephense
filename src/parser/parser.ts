@@ -319,7 +319,7 @@ export namespace Parser {
             return next();
         } else if (tokenType === TokenType.Semicolon && t.tokenType === TokenType.CloseTag) {
             //implicit end statement
-            return undefined;
+            return Token.create(TokenType.ImplicitSemicolon, t.offset, 0, t.modeStack);
         } else {
             //test skipping a single token to sync
             if (peek(1).tokenType === tokenType) {
@@ -339,7 +339,7 @@ export namespace Parser {
             return next();
         } else if (tokenTypes.indexOf(TokenType.Semicolon) > -1 && t.tokenType === TokenType.CloseTag) {
             //implicit end statement
-            return undefined;
+            return Token.create(TokenType.ImplicitSemicolon, t.offset, 0, t.modeStack);
         } else {
             //test skipping single token to sync
             if (tokenTypes.indexOf(peek(1).tokenType) > -1) {
@@ -470,6 +470,9 @@ export namespace Parser {
 
     }
 
+    /**
+     * default strategy is to skip tokens until a token in the combined recoverSetStack is found
+     */
     function defaultSyncStrategy() {
 
         let mergedRecoverTokenTypeArray: TokenType[] = [];
