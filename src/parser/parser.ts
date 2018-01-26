@@ -292,28 +292,6 @@ export namespace Parser {
         return phraseStack.pop();
     }
 
-    function hidden(p?:Phrase) {
-
-        if(!p) {
-            p = phraseStack[phraseStack.length - 1];
-        }
-        
-        let t: Token;
-
-        while (true) {
-            
-            t = tokenBuffer.length ? tokenBuffer.shift() : Lexer.lex();
-            if (t.tokenType < TokenType.Comment) {
-                tokenBuffer.unshift(t);
-                break;
-            } else {
-                p.children.push(t);
-            }
-
-        }
-
-    }
-
     function optional(tokenType: TokenType) {
 
         if (tokenType === peek().tokenType) {
@@ -433,7 +411,7 @@ export namespace Parser {
         //last skipped token should go back on buffer
         tokenBuffer.unshift(skipped.pop());
         return skipped;
-        
+
     }
 
     function error(expected?:TokenType):ParseError {
