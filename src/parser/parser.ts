@@ -275,23 +275,6 @@ export namespace Parser {
         errorPhrase = null;
     }
 
-    function start(phraseType?:PhraseType, dontPushHiddenToParent?: boolean) {
-        //parent node gets hidden tokens between children
-        if (!dontPushHiddenToParent) {
-            hidden();
-        }
-        let p:Phrase = {
-            phraseType: phraseType ? phraseType : PhraseType.Unknown,
-            children: []
-        }
-        phraseStack.push(p);
-        return p;
-    }
-
-    function end() {
-        return phraseStack.pop();
-    }
-
     function optional(tokenType: TokenType) {
 
         if (tokenType === peek().tokenType) {
