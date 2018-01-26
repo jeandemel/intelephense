@@ -413,13 +413,14 @@ export namespace Parser {
     }
 
     function list(phraseType: PhraseType, elementFunction: () => Phrase | Token,
-        elementStartPredicate: Predicate, breakOn?: TokenType[], recoverSet?: TokenType[]) {
+        elementStartPredicate: Predicate, breakOn?: TokenType[], recoverSet?: TokenType[], allowDocComment?:boolean) {
 
-        let p = start(phraseType);
-
-        let t: Token;
-        let recoveryAttempted = false;
+        let t = peek(0, allowDocComment);
         let listRecoverSet = recoverSet ? recoverSet.slice(0) : [];
+        let children:(Phrase|Token)[] = [];
+
+        let start = Lexer.tokenPackedRange(t)[0];
+        let end = start;
 
         if (breakOn) {
             Array.prototype.push.apply(listRecoverSet, breakOn);
@@ -427,32 +428,44 @@ export namespace Parser {
 
         recoverSetStack.push(listRecoverSet);
 
-        while (true) {
-            
-            t = peek();
+        while (!breakOn || breakOn.indexOf(t.tokenType) < 0) {
             
             if (elementStartPredicate(t)) {
-                recoveryAttempted = false;
-                p.children.push(elementFunction());
-            } else if (!breakOn || breakOn.indexOf(t.tokenType) >= 0 || recoveryAttempted) {
+                children.push(elementFunction());
+            } else if (!breakOn) {
                 break;
             } else {
-                error();
-                //attempt to sync with token stream
-                t = peek(1);
-                if (elementStartPredicate(t) || breakOn.indexOf(t.tokenType) >= 0) {
-                    skip((x) => { return x === t });
+                //error
+                //attempt to skip single token to sync
+                let t1 = peek(1, allowDocComment);
+                if (elementStartPredicate(t1) || (breakOn && breakOn.indexOf(t1.tokenType) > -1)) {
+                    children.push(error([next()], t));
                 } else {
-                    defaultSyncStrategy();
+                    //skip many to sync
+                    children.push(error(defaultSyncStrategy(), t));
+                    //only continue if recovered on a token in the listRecoverSet
+                    t = peek(0, allowDocComment);
+                    if (listRecoverSet.indexOf(t.tokenType) < 0) {
+                        break;
+                    }
                 }
-                recoveryAttempted = true;
             }
+
+            t = peek(0, allowDocComment);
 
         }
 
         recoverSetStack.pop();
+        if(children.length > 0) {
+            let child = children[children.length - 1];
+            if((<Token>child).tokenType !== undefined) {
+                end = Lexer.tokenPackedRange(<Token>child)[1];
+            } else {
+                end = (<Phrase>child).end;
+            }
+        }
 
-        return end();
+        return Phrase.create(phraseType, start, end, children);
 
     }
 
@@ -466,7 +479,7 @@ export namespace Parser {
 
         let mergedRecoverTokenTypeSet = new Set(mergedRecoverTokenTypeArray);
         let predicate: Predicate = (x) => { return mergedRecoverTokenTypeSet.has(x.tokenType); };
-        skip(predicate);
+        return skip(predicate);
 
     }
 
