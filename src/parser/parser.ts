@@ -368,10 +368,6 @@ export namespace Parser {
             //test skipping a single token to sync
             if (peek(1).tokenType === tokenType) {
                 e.children.push(next(), next()); //skipped and expected
-                //let predicate = (x: Token) => { return x.tokenType === tokenType; };
-                //skip(predicate);
-                //errorPhrase = null;
-                //return next(); //tokenType
             }
             return e;
         }
@@ -382,22 +378,19 @@ export namespace Parser {
 
         let t = peek();
 
-        if (tokenTypes.indexOf(t.tokenType) >= 0) {
-            errorPhrase = null;
+        if (tokenTypes.indexOf(t.tokenType) > -1) {
+            errorPhrase = undefined;
             return next();
-        } else if (tokenTypes.indexOf(TokenType.Semicolon) >= 0 && t.tokenType === TokenType.CloseTag) {
+        } else if (tokenTypes.indexOf(TokenType.Semicolon) > -1 && t.tokenType === TokenType.CloseTag) {
             //implicit end statement
-            return t;
+            return undefined;
         } else {
-            error();
+            let e = error();
             //test skipping single token to sync
-            if (tokenTypes.indexOf(peek(1).tokenType) >= 0) {
-                let predicate = (x: Token) => { return tokenTypes.indexOf(x.tokenType) >= 0; };
-                skip(predicate);
-                errorPhrase = null;
-                return next(); //tokenType
+            if (tokenTypes.indexOf(peek(1).tokenType) > -1) {
+                e.children.push(next(), next()); //skipped and expected
             }
-            return null;
+            return e;
         }
 
     }
