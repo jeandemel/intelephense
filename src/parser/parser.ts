@@ -393,13 +393,25 @@ export namespace Parser {
 
     }
 
-    function error(expected?:TokenType):ParseError {
-        return {
-            phraseType : PhraseType.Error,
-            children:[],
-            unexpected: peek(),
-            expected: expected
-        };
+    function error(children:(Phrase|Token)[], unexpected:Token, expected?:TokenType):ParseError {
+        
+        //prefer the child range then the unexpected token
+        let start:number;
+        let end:number;
+
+        if(children.length > 0) {
+            let first = children[0];
+            let last = children[children.length - 1];
+
+            start = Lexer.tokenPackedRange(first as Token)[0];
+            end = Lexer.tokenPackedRange(last as Token)[1];
+
+        } else {
+            [start, end] = Lexer.tokenPackedRange(unexpected);
+        }
+
+        return Phrase.createParseError(start, end, children, unexpected, expected);
+
     }
 
     function list(phraseType: PhraseType, elementFunction: () => Phrase | Token,
