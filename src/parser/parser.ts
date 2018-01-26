@@ -336,7 +336,7 @@ export namespace Parser {
 
     }
 
-    function next(doNotPush?: boolean): Token {
+    function next(allowDocComment?: boolean): Token {
 
         let t = tokenBuffer.length ? tokenBuffer.shift() : Lexer.lex();
 
@@ -344,12 +344,9 @@ export namespace Parser {
             return t;
         }
 
-        if (t.tokenType >= TokenType.Comment) {
+        if (t.tokenType >= TokenType.Comment && (!allowDocComment || t.tokenType !== TokenType.DocumentComment)) {
             //hidden token
-            phraseStack[phraseStack.length - 1].children.push(t);
-            return next(doNotPush);
-        } else if (!doNotPush) {
-            phraseStack[phraseStack.length - 1].children.push(t);
+            return next(allowDocComment);
         }
 
         return t;
