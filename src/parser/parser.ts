@@ -259,12 +259,8 @@ export namespace Parser {
     var recoverSetStack: TokenType[][];
 
     export function parse(text: string): Phrase {
-
         init(text);
-        let stmtList = statementList([TokenType.EndOfFile]);
-        //append trailing hidden tokens
-        hidden(stmtList);
-        return stmtList;
+        return statementList([TokenType.EndOfFile]);
     }
 
     function init(text: string, lexerModeStack?: LexerMode[]) {
