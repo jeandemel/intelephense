@@ -1186,7 +1186,6 @@ export namespace Lexer {
             ++s.position;
 
             if (c === '\'') {
-                ++s.position;
                 return { tokenType: TokenType.StringLiteral, offset: start, length: s.position - start, modeStack: s.modeStack };
             } else if (c === '\\' && s.position < l && s.input[s.position] !== '\r' && s.input[s.position] !== '\n') {
                 ++s.position;
@@ -1568,12 +1567,11 @@ export namespace Lexer {
                 break;
         }
 
-        if (tokenType > 0) {
-            return { tokenType: tokenType, offset: start, length: s.position - start, modeStack: s.modeStack };
+        if (!tokenType) {
+            tokenType = TokenType.Name;
         }
 
-        return { tokenType: TokenType.Name, offset: start, length: s.position - start, modeStack: s.modeStack };
-
+        return { tokenType: tokenType, offset: start, length: s.position - start, modeStack: s.modeStack };
     }
 
     function scriptingYield(s: LexerState, start: number) {
@@ -1841,6 +1839,7 @@ export namespace Lexer {
         let tokenType = TokenType.Comment;
         let start = s.position - 2;
         let l = s.input.length;
+        let c:string;
 
         if (s.position < l && s.input[s.position] === '*' && s.position + 1 < l && s.input[s.position + 1] !== '/') {
             ++s.position;
@@ -1849,11 +1848,19 @@ export namespace Lexer {
 
         //find comment end */
         while (s.position < l) {
-            if (s.input[s.position] === '*' && s.position + 1 < l && s.input[s.position + 1] === '/') {
-                s.position += 2;
-                break;
-            }
+            c = s.input[s.position];
             ++s.position;
+            if (c === '*' && s.position < l && s.input[s.position] === '/') {
+                ++s.position;
+                break;
+            } else if(c === '\r') {
+                if(s.position < l && s.input[s.position] === '\n') {
+                    ++s.position;
+                }
+                s.lineOffsets.push(s.position);
+            } else if(c === '\n') {
+                s.lineOffsets.push(s.position);
+            }
         }
 
         //todo WARN unterminated comment
