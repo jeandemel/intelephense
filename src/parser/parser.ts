@@ -358,21 +358,22 @@ export namespace Parser {
         let t = peek();
 
         if (t.tokenType === tokenType) {
-            errorPhrase = null;
+            errorPhrase = undefined;
             return next();
         } else if (tokenType === TokenType.Semicolon && t.tokenType === TokenType.CloseTag) {
             //implicit end statement
-            return t;
+            return undefined;
         } else {
-            error(tokenType);
+            let e = error(tokenType);
             //test skipping a single token to sync
             if (peek(1).tokenType === tokenType) {
-                let predicate = (x: Token) => { return x.tokenType === tokenType; };
-                skip(predicate);
-                errorPhrase = null;
-                return next(); //tokenType
+                e.children.push(next(), next()); //skipped and expected
+                //let predicate = (x: Token) => { return x.tokenType === tokenType; };
+                //skip(predicate);
+                //errorPhrase = null;
+                //return next(); //tokenType
             }
-            return null;
+            return e;
         }
 
     }
@@ -446,21 +447,13 @@ export namespace Parser {
 
     }
 
-    function error(expected?:TokenType) {
-
-        //dont report errors if recovering from another
-        if (errorPhrase) {
-            return;
-        }
-
-        errorPhrase = {
+    function error(expected?:TokenType):ParseError {
+        return {
             phraseType : PhraseType.Error,
             children:[],
-            unexpected: peek()
+            unexpected: peek(),
+            expected: expected
         };
-
-        phraseStack[phraseStack.length - 1].children.push(errorPhrase);
-
     }
 
     function list(phraseType: PhraseType, elementFunction: () => Phrase | Token,
