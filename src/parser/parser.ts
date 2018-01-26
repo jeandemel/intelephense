@@ -420,24 +420,20 @@ export namespace Parser {
         return t;
     }
 
-    /**
-     * skipped tokens get pushed to error phrase children
-     */
-    function skip(predicate: Predicate) {
+    function skip(until: Predicate) {
 
         let t: Token;
+        let skipped:Token[] = [];
 
-        while (true) {
+        do {
             t = tokenBuffer.length ? tokenBuffer.shift() : Lexer.lex();
+            skipped.push(t);
+        } while(!until(t) && t.tokenType !== TokenType.EndOfFile);
 
-            if (predicate(t) || t.tokenType === TokenType.EndOfFile) {
-                tokenBuffer.unshift(t);
-                break;
-            } else {
-                errorPhrase.children.push(t);
-            }
-        }
-
+        //last skipped token should go back on buffer
+        tokenBuffer.unshift(skipped.pop());
+        return skipped;
+        
     }
 
     function error(expected?:TokenType):ParseError {
