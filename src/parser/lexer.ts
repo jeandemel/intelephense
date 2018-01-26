@@ -233,14 +233,14 @@ export namespace Lexer {
 
     var state: LexerState;
 
-    export function setInput(text: string, lexerModeStack?: LexerMode[], position?: number, lineOffset?: number) {
+    export function setInput(text: string, lexerModeStack?: LexerMode[], position?: number) {
         state = {
-            position: position ? position : 0,
+            position: position > 0 ? position : 0,
             input: text,
             modeStack: lexerModeStack ? lexerModeStack : [LexerMode.Initial],
             doubleQuoteScannedLength: -1,
             heredocLabel: null,
-            lineOffsets: lineOffset ? [lineOffset] : [0]
+            lineOffsets: [0]
         };
     }
 
