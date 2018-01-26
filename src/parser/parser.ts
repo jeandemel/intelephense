@@ -498,21 +498,27 @@ export namespace Parser {
 
     }
 
+    function nodePackedRange(node:Phrase|Token) {
+        if((<Token>node).tokenType !== undefined) {
+            return Lexer.tokenPackedRange(<Token>node);
+        } else {
+            return [(<Phrase>node).start, (<Phrase>node).end];
+        }
+    }
+
     function constDeclaration() {
-        return {
-            phraseType: PhraseType.ConstDeclaration,
-            children: [
-                next(), //const
-                delimitedList(
-                    PhraseType.ConstElementList,
-                    constElement,
-                    isConstElementStartToken,
-                    TokenType.Comma,
-                    [TokenType.Semicolon]
-                ), 
-                expect(TokenType.Semicolon)
-            ]
-        };
+        const keyword = next();
+        const start = nodePackedRange(keyword)[0];
+        const list = delimitedList(
+            PhraseType.ConstElementList,
+            constElement,
+            isConstElementStartToken,
+            TokenType.Comma,
+            [TokenType.Semicolon]
+        );
+        const semicolon = expect(TokenType.Semicolon);
+        const end = nodePackedRange(semicolon)[1];
+        return Phrase.create(PhraseType.ConstDeclaration, start, end, [keyword, list, semicolon]);
     }
 
     function isClassConstElementStartToken(t: Token) {
@@ -524,34 +530,28 @@ export namespace Parser {
     }
 
     function constElement() {
-
-        let p = start(PhraseType.ConstElement);
-        expect(TokenType.Name);
-        expect(TokenType.Equals);
-        p.children.push(expression(0));
-        return end();
-
+        const name = expect(TokenType.Name);
+        const start = nodePackedRange(name)[0];
+        const equals = expect(TokenType.Equals);
+        const expr = expression(0);
+        const end = nodePackedRange(expr)[1];
+        return Phrase.create(PhraseType.ConstElement, start, end, [name, equals, expr]);
     }
 
     function expression(minPrecedence: number) {
 
         let precedence: number;
         let associativity: Associativity;
-        let op: Token;
         let lhs = expressionAtom();
+        let start:number, end:number;
+        [start, end] = nodePackedRange(lhs);
         let p: Phrase;
         let rhs: Phrase | Token;
-        let binaryPhraseType: PhraseType;
+        let op = peek();
+        let binaryPhraseType = binaryOpToPhraseType(op);
 
-        while (true) {
+        while (binaryPhraseType !== PhraseType.Unknown) {
             
-            op = peek();
-            binaryPhraseType = binaryOpToPhraseType(op);
-
-            if (binaryPhraseType === PhraseType.Unknown) {
-                break;
-            }
-
             [precedence, associativity] = precedenceAssociativityTuple(op);
 
             if (precedence < minPrecedence) {
@@ -562,28 +562,33 @@ export namespace Parser {
                 ++precedence;
             }
 
-
             if (binaryPhraseType === PhraseType.TernaryExpression) {
                 lhs = ternaryExpression(lhs);
                 continue;
             }
 
-            p = start(binaryPhraseType, true);
-            p.children.push(lhs);
-            next();
+            op = next();
 
             if (binaryPhraseType === PhraseType.InstanceOfExpression) {
-                p.children.push(typeDesignator(PhraseType.InstanceofTypeDesignator));
+                rhs = typeDesignator(PhraseType.InstanceofTypeDesignator);
+                end = nodePackedRange(rhs)[1];
+                lhs = Phrase.create(binaryPhraseType, start, end, [lhs, op, rhs]);
+            } else if(
+                binaryPhraseType === PhraseType.SimpleAssignmentExpression &&
+                peek().tokenType === TokenType.Ampersand
+            ){
+                let ampersand = next();
+                rhs = expression(precedence));
+                end = nodePackedRange(rhs)[1];
+                lhs = Phrase.create(PhraseType.ByRefAssignmentExpression, start, end, [lhs, op, ampersand, rhs]);
             } else {
-                if (binaryPhraseType === PhraseType.SimpleAssignmentExpression &&
-                    peek().tokenType === TokenType.Ampersand) {
-                    next(); //&
-                    p.phraseType = PhraseType.ByRefAssignmentExpression;
-                }
-                p.children.push(expression(precedence));
+                rhs = expression(precedence);
+                end = nodePackedRange(rhs)[1];
+                lhs = Phrase.create(binaryPhraseType, start, end, [lhs, op, rhs]);
             }
 
-            lhs = end();
+            op = peek();
+            binaryPhraseType = binaryOpToPhraseType(op);
 
         }
 
