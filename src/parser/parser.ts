@@ -321,12 +321,11 @@ export namespace Parser {
             //implicit end statement
             return undefined;
         } else {
-            let e = error(tokenType);
             //test skipping a single token to sync
             if (peek(1).tokenType === tokenType) {
-                e.children.push(next(), next()); //skipped and expected
+                return error([next(), next()], t, tokenType);
             }
-            return e;
+            return error([], t, tokenType);
         }
 
     }
@@ -342,12 +341,11 @@ export namespace Parser {
             //implicit end statement
             return undefined;
         } else {
-            let e = error();
             //test skipping single token to sync
             if (tokenTypes.indexOf(peek(1).tokenType) > -1) {
-                e.children.push(next(), next()); //skipped and expected
+                return error([next(), next()], t);
             }
-            return e;
+            return error([], t);
         }
 
     }
@@ -395,7 +393,7 @@ export namespace Parser {
 
     function error(children:(Phrase|Token)[], unexpected:Token, expected?:TokenType):ParseError {
         
-        //prefer the child range then the unexpected token
+        //prefer the child range then the unexpected token range
         let start:number;
         let end:number;
 
