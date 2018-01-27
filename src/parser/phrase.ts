@@ -56,6 +56,7 @@ export const enum PhraseType {
     DeclareDirective,
     DeclareStatement,
     DefaultStatement,
+    DocBlock,
     DoStatement,
     DoubleQuotedStringLiteral,
     EchoIntrinsic,
@@ -617,6 +618,8 @@ export function phraseTypeToString(type: PhraseType) {
             return 'YieldExpression';
         case PhraseType.YieldFromExpression:
             return 'YieldFromExpression';
+        case PhraseType.DocBlock:
+            return 'DocBlock';
         default:
             return '';
     }
