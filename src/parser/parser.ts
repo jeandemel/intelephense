@@ -272,25 +272,11 @@ export namespace Parser {
     }
 
     function optional(tokenType: TokenType) {
-
-        if (tokenType === peek().tokenType) {
-            errorPhrase = undefined;
-            return next();
-        } else {
-            return undefined;
-        }
-
+        return tokenType === peek().tokenType ? next() : undefined;
     }
 
     function optionalOneOf(tokenTypes: TokenType[]) {
-
-        if (tokenTypes.indexOf(peek().tokenType) > -1) {
-            errorPhrase = undefined;
-            return next();
-        } else {
-            return undefined;
-        }
-
+        return tokenTypes.indexOf(peek().tokenType) > -1 ? next() : undefined;
     }
 
     /**
@@ -298,7 +284,7 @@ export namespace Parser {
      * @param allowDocComment doc comments returned when true
      */
     function next(allowDocComment?: boolean): Token {
-        let t = tokenBuffer.length ? tokenBuffer.shift() : Lexer.lex();
+        const t = tokenBuffer.length > 0 ? tokenBuffer.shift() : Lexer.lex();
         if (t.tokenType >= TokenType.Comment && (!allowDocComment || t.tokenType !== TokenType.DocumentComment)) {
             return next(allowDocComment);
         }
@@ -306,11 +292,8 @@ export namespace Parser {
     }
 
     function expect(tokenType: TokenType) {
-
         let t = peek();
-
         if (t.tokenType === tokenType) {
-            errorPhrase = undefined;
             return next();
         } else if (tokenType === TokenType.Semicolon && t.tokenType === TokenType.CloseTag) {
             //implicit end statement
@@ -322,15 +305,11 @@ export namespace Parser {
             }
             return error([], t, tokenType);
         }
-
     }
 
     function expectOneOf(tokenTypes: TokenType[]) {
-
         let t = peek();
-
         if (tokenTypes.indexOf(t.tokenType) > -1) {
-            errorPhrase = undefined;
             return next();
         } else if (tokenTypes.indexOf(TokenType.Semicolon) > -1 && t.tokenType === TokenType.CloseTag) {
             //implicit end statement
@@ -342,7 +321,6 @@ export namespace Parser {
             }
             return error([], t);
         }
-
     }
 
     function peek(n?: number, allowDocComment?: boolean) {
@@ -394,12 +372,8 @@ export namespace Parser {
         let end: number;
 
         if (children.length > 0) {
-            let first = children[0];
-            let last = children[children.length - 1];
-
-            start = Lexer.tokenPackedRange(first as Token)[0];
-            end = Lexer.tokenPackedRange(last as Token)[1];
-
+            start = nodePackedRange(children[0])[0];
+            end = nodePackedRange(children[children.length - 1])[1];
         } else {
             start = end = Lexer.tokenPackedRange(unexpected)[0];
         }
@@ -414,18 +388,17 @@ export namespace Parser {
     }
 
     function phrase(type: PhraseType, children: (Phrase | Token)[], packedRange?: [number, number]) {
-
         let start: number, end: number;
         if (!packedRange) {
             if (children.length < 1) {
-                throw new Error('Invalid Argument');
+                [start, end] = Lexer.tokenPackedRange(peek());
+            } else {
+                start = nodePackedRange(children[0])[0];
+                end = nodePackedRange(children[children.length - 1])[1];
             }
-            start = nodePackedRange(children[0])[0];
-            end = nodePackedRange(children[children.length - 1])[1];
         } else {
             [start, end] = packedRange;
         }
-
         return Phrase.create(type, start, end, children);
     }
 
@@ -435,7 +408,6 @@ export namespace Parser {
         let t = peek(0, allowDocComment);
         let listRecoverSet = recoverSet ? recoverSet.slice(0) : [];
         let children: (Phrase | Token)[] = [];
-
         let start = Lexer.tokenPackedRange(t)[0];
         let end = start;
 
@@ -473,16 +445,7 @@ export namespace Parser {
         }
 
         recoverSetStack.pop();
-        if (children.length > 0) {
-            let child = children[children.length - 1];
-            if ((<Token>child).tokenType !== undefined) {
-                end = Lexer.tokenPackedRange(<Token>child)[1];
-            } else {
-                end = (<Phrase>child).end;
-            }
-        }
-
-        return Phrase.create(phraseType, start, end, children);
+        return phrase(phraseType, children);
 
     }
 
@@ -515,16 +478,11 @@ export namespace Parser {
     }
 
     function nodePackedRange(node: Phrase | Token) {
-        if ((<Token>node).tokenType !== undefined) {
-            return Lexer.tokenPackedRange(<Token>node);
-        } else {
-            return [(<Phrase>node).start, (<Phrase>node).end];
-        }
+        return (<Token>node).tokenType !== undefined ? Lexer.tokenPackedRange(<Token>node) : [(<Phrase>node).start, (<Phrase>node).end];
     }
 
     function constDeclaration() {
         const keyword = next();
-        const start = nodePackedRange(keyword)[0];
         const list = delimitedList(
             PhraseType.ConstElementList,
             constElement,
@@ -533,8 +491,7 @@ export namespace Parser {
             [TokenType.Semicolon]
         );
         const semicolon = expect(TokenType.Semicolon);
-        const end = nodePackedRange(semicolon)[1];
-        return Phrase.create(PhraseType.ConstDeclaration, start, end, [keyword, list, semicolon]);
+        return phrase(PhraseType.ConstDeclaration, [keyword, list, semicolon]);
     }
 
     function isClassConstElementStartToken(t: Token) {
@@ -547,11 +504,9 @@ export namespace Parser {
 
     function constElement() {
         const name = expect(TokenType.Name);
-        const start = nodePackedRange(name)[0];
         const equals = expect(TokenType.Equals);
         const expr = expression(0);
-        const end = nodePackedRange(expr)[1];
-        return Phrase.create(PhraseType.ConstElement, start, end, [name, equals, expr]);
+        return phrase(PhraseType.ConstElement, [name, equals, expr]);
     }
 
     function expression(minPrecedence: number) {
@@ -559,8 +514,6 @@ export namespace Parser {
         let precedence: number;
         let associativity: Associativity;
         let lhs = expressionAtom();
-        let start: number, end: number;
-        [start, end] = nodePackedRange(lhs);
         let p: Phrase;
         let rhs: Phrase | Token;
         let op = peek();
@@ -579,7 +532,7 @@ export namespace Parser {
             }
 
             if (binaryPhraseType === PhraseType.TernaryExpression) {
-                lhs = ternaryExpression(lhs, start);
+                lhs = ternaryExpression(lhs);
                 continue;
             }
 
@@ -587,20 +540,17 @@ export namespace Parser {
 
             if (binaryPhraseType === PhraseType.InstanceOfExpression) {
                 rhs = typeDesignator(PhraseType.InstanceofTypeDesignator);
-                end = nodePackedRange(rhs)[1];
-                lhs = Phrase.create(binaryPhraseType, start, end, [lhs, op, rhs]);
+                lhs = phrase(binaryPhraseType, [lhs, op, rhs]);
             } else if (
                 binaryPhraseType === PhraseType.SimpleAssignmentExpression &&
                 peek().tokenType === TokenType.Ampersand
             ) {
                 let ampersand = next();
                 rhs = expression(precedence);
-                end = nodePackedRange(rhs)[1];
-                lhs = Phrase.create(PhraseType.ByRefAssignmentExpression, start, end, [lhs, op, ampersand, rhs]);
+                lhs = phrase(PhraseType.ByRefAssignmentExpression, [lhs, op, ampersand, rhs]);
             } else {
                 rhs = expression(precedence);
-                end = nodePackedRange(rhs)[1];
-                lhs = Phrase.create(binaryPhraseType, start, end, [lhs, op, rhs]);
+                lhs = phrase(binaryPhraseType, [lhs, op, rhs]);
             }
 
             op = peek();
@@ -612,7 +562,7 @@ export namespace Parser {
 
     }
 
-    function ternaryExpression(testExpr: Phrase | Token, start: number) {
+    function ternaryExpression(testExpr: Phrase | Token) {
 
         const question = next();
         let colon: Token | ParseError = optional(TokenType.Colon);
@@ -621,27 +571,16 @@ export namespace Parser {
         if (colon) {
             //short form
             falseExpr = expression(0);
-            return Phrase.create(
-                PhraseType.TernaryExpression,
-                start,
-                nodePackedRange(falseExpr)[1],
-                [testExpr, question, colon, falseExpr]
-            );
+            return phrase(PhraseType.TernaryExpression, [testExpr, question, colon, falseExpr]);
         }
 
         const trueExpr = expression(0);
         colon = expect(TokenType.Colon);
         falseExpr = expression(0);
-
-        return Phrase.create(
-            PhraseType.TernaryExpression,
-            start,
-            nodePackedRange(falseExpr)[1],
-            [testExpr, question, trueExpr, colon, falseExpr]
-        );
+        return phrase(PhraseType.TernaryExpression, [testExpr, question, trueExpr, colon, falseExpr]);
     }
 
-
+    >
     function variableOrExpression() {
 
         let part = variableAtom();
@@ -2394,7 +2333,7 @@ export namespace Parser {
 
     function ifStatement() {
 
-        const children:(Phrase|Token)[] = [];
+        const children: (Phrase | Token)[] = [];
         children.push(next()); //if
         children.push(expect(TokenType.OpenParenthesis));
         children.push(expression(0));
@@ -2734,7 +2673,7 @@ export namespace Parser {
         return phrase(PhraseType.CloneExpression, [keyword, expr]);
     }
 
-    function isArrayElementStartOrComma(t:Token) {
+    function isArrayElementStartOrComma(t: Token) {
         return isArrayElementStart(t) || t.tokenType === TokenType.Comma;
     }
 
