@@ -129,6 +129,8 @@ export const enum PhraseType {
     NamedLabelStatement,
     NamespaceAliasingClause,
     NamespaceDefinition,
+    NamespaceDefinitionHeader,
+    NamespaceDefinitionBody,
     NamespaceName,
     NamespaceUseClause,
     NamespaceUseClauseList,
