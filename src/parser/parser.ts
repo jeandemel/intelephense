@@ -364,7 +364,7 @@ export namespace Parser {
 
     }
 
-    function error(children: (Phrase | Token)[], unexpected: Token, expected?: TokenType, errType?: PhraseType): ParseError {
+    function error(children: (Phrase | Token)[], unexpected: Token, expected?: TokenType): ParseError {
 
         //prefer the child range then the unexpected token start range
         //ie if no tokens are skipped then this node is empty and start === end
@@ -378,28 +378,19 @@ export namespace Parser {
             start = end = Lexer.tokenPackedRange(unexpected)[0];
         }
 
-        let err = Phrase.createParseError(start, end, children, unexpected, expected);
-        if (errType) {
-            err.phraseType = errType;
-        }
-
-        return err;
-
+        return Phrase.createParseError(start, end, children, unexpected, expected);
     }
 
     function phrase(type: PhraseType, children: (Phrase | Token)[], packedRange?: [number, number]) {
-        let start: number, end: number;
         if (!packedRange) {
             if (children.length < 1) {
-                [start, end] = Lexer.tokenPackedRange(peek());
+                packedRange = Lexer.tokenPackedRange(peek());
+                packedRange[1] = packedRange[0];
             } else {
-                start = nodePackedRange(children[0])[0];
-                end = nodePackedRange(children[children.length - 1])[1];
+                packedRange = [nodePackedRange(children[0])[0], nodePackedRange(children[children.length - 1])[1]];
             }
-        } else {
-            [start, end] = packedRange;
         }
-        return Phrase.create(type, start, end, children);
+        return Phrase.create(type, packedRange[0], packedRange[1], children);
     }
 
     function list(phraseType: PhraseType, elementFunction: () => Phrase | Token,
@@ -580,7 +571,6 @@ export namespace Parser {
         return phrase(PhraseType.TernaryExpression, [testExpr, question, trueExpr, colon, falseExpr]);
     }
 
-    >
     function variableOrExpression() {
 
         let part = variableAtom();
@@ -620,14 +610,12 @@ export namespace Parser {
     }
 
     function constantAccessExpression(qName: Phrase | Token) {
-        let start: number, end: number;
-        [start, end] = nodePackedRange(qName);
-        return Phrase.create(PhraseType.ConstantAccessExpression, start, end, [qName]);
+        return phrase(PhraseType.ConstantAccessExpression, [qName]);
     }
 
     function postfixExpression(phraseType: PhraseType, variableNode: Phrase) {
         const op = next();
-        return Phrase.create(phraseType, nodePackedRange(variableNode)[0], nodePackedRange(op)[1], [variableNode, op]);
+        return phrase(phraseType, [variableNode, op]);
     }
 
     function isDereferenceOperator(t: Token) {
@@ -736,154 +724,100 @@ export namespace Parser {
             case TokenType.Isset:
                 return issetIntrinsic();
             default:
-                return error([], t, undefined, PhraseType.ErrorExpression);
+                return error([], t);
         }
 
     }
 
     function exitIntrinsic() {
         const keyword = next(); //exit or die
-        let start: number, end: number;
-        [start, end] = nodePackedRange(keyword);
         const open = optional(TokenType.OpenParenthesis);
-        let children: (Phrase | Token)[];
 
-        if (open) {
-            let expr: Phrase | Token;
-            if (isExpressionStart(peek())) {
-                expr = expression(0);
-            }
-            const close = expect(TokenType.CloseParenthesis);
-            children = expr ? [keyword, open, expr, close] : [keyword, open, close];
-            end = nodePackedRange(close)[1];
-        } else {
-            children = [keyword];
+        if (!open) {
+            return phrase(PhraseType.ExitIntrinsic, [keyword]);
         }
 
-        return Phrase.create(PhraseType.ExitIntrinsic, start, end, children);
+        if (!isExpressionStart(peek())) {
+            const close = expect(TokenType.CloseParenthesis);
+            return phrase(PhraseType.ExitIntrinsic, [keyword, open, close]);
+        }
+        const expr = expression(0);
+        const close = expect(TokenType.CloseParenthesis);
+        return phrase(PhraseType.ExitIntrinsic, [keyword, open, expr, close]);
     }
 
     function issetIntrinsic() {
-
         const keyword = next(); //isset
         const open = expect(TokenType.OpenParenthesis);
         const list = variableList([TokenType.CloseParenthesis]);
         const close = expect(TokenType.CloseParenthesis);
-        return Phrase.create(
-            PhraseType.IssetIntrinsic,
-            nodePackedRange(keyword)[0],
-            nodePackedRange(close)[1],
-            [keyword, open, list, close]
-        );
-
+        return phrase(PhraseType.IssetIntrinsic, [keyword, open, list, close]);
     }
 
     function emptyIntrinsic() {
-        const keyword = next(); //keyword
+        const keyword = next(); //empty
         const open = expect(TokenType.OpenParenthesis);
         const expr = expression(0);
         const close = expect(TokenType.CloseParenthesis);
-        return Phrase.create(
-            PhraseType.EmptyIntrinsic,
-            nodePackedRange(keyword)[0],
-            nodePackedRange(close)[1],
-            [keyword, open, expr, close]
-        );
+        return phrase(PhraseType.EmptyIntrinsic, [keyword, open, expr, close]);
     }
 
     function evalIntrinsic() {
-        const keyword = next();
+        const keyword = next(); //eval
         const open = expect(TokenType.OpenParenthesis);
         const expr = expression(0);
         const close = expect(TokenType.CloseParenthesis);
-        return Phrase.create(
-            PhraseType.EvalIntrinsic,
-            nodePackedRange(keyword)[0],
-            nodePackedRange(close)[1],
-            [keyword, open, expr, close]
-        );
+        return phrase(PhraseType.EvalIntrinsic, [keyword, open, expr, close]);
     }
 
     function scriptInclusion(phraseType: PhraseType) {
         const keyword = next();
         const expr = expression(0);
-        return Phrase.create(
-            phraseType,
-            nodePackedRange(keyword)[0],
-            nodePackedRange(expr)[1],
-            [keyword, expr]
-        );
+        return phrase(phraseType, [keyword, expr]);
     }
 
     function printIntrinsic() {
         const keyword = next();
         const expr = expression(0);
-        return Phrase.create(
-            PhraseType.PrintIntrinsic,
-            nodePackedRange(keyword)[0],
-            nodePackedRange(expr)[1],
-            [keyword, expr]
-        );
+        return phrase(PhraseType.PrintIntrinsic, [keyword, expr]);
     }
 
     function yieldFromExpression() {
         const keyword = next();
         const expr = expression(0);
-        return Phrase.create(
-            PhraseType.YieldFromExpression,
-            nodePackedRange(keyword)[0],
-            nodePackedRange(expr)[1],
-            [keyword, expr]
-        );
+        return phrase(PhraseType.YieldFromExpression, [keyword, expr]);
     }
 
     function yieldExpression() {
         const keyword = next();
-        let start: number, end: number;
-        [start, end] = nodePackedRange(keyword);
 
         if (!isExpressionStart(peek())) {
-            return Phrase.create(PhraseType.YieldExpression, start, end, [keyword]);
+            return phrase(PhraseType.YieldExpression, [keyword]);
         }
 
         const keyOrValue = expression(0);
         const arrow = optional(TokenType.FatArrow);
 
-        if (arrow) {
-            const value = expression(0);
-            return Phrase.create(
-                PhraseType.YieldExpression,
-                start,
-                nodePackedRange(value)[1],
-                [keyword, keyOrValue, arrow, value]
-            );
+        if (!arrow) {
+            return phrase(PhraseType.YieldExpression, [keyword, keyOrValue]);
         }
 
-        Phrase.create(PhraseType.YieldExpression, start, nodePackedRange(keyOrValue)[1], [keyword]);
+        const value = expression(0);
+        return phrase(PhraseType.YieldExpression, [keyword, keyOrValue, arrow, value]);
     }
 
     function shellCommandExpression() {
         const open = next(); //`
         const list = encapsulatedVariableList(TokenType.Backtick);
         const close = expect(TokenType.Backtick);
-        return Phrase.create(
-            PhraseType.ShellCommandExpression,
-            nodePackedRange(open)[0],
-            nodePackedRange(close)[1],
-            [open, list, close]
-        );
+        return phrase(PhraseType.ShellCommandExpression, [open, list, close]);
     }
 
     function doubleQuotedStringLiteral() {
         const open = next(); //"
         const list = encapsulatedVariableList(TokenType.DoubleQuote);
         const close = expect(TokenType.DoubleQuote);
-        return Phrase.create(
-            PhraseType.DoubleQuotedStringLiteral,
-            nodePackedRange(open)[0],
-            nodePackedRange(close)[1],
-            [open, list, close]
-        );
+        return phrase(PhraseType.DoubleQuotedStringLiteral, [open, list, close]);
     }
 
     function encapsulatedVariableList(breakOn: TokenType) {
@@ -911,7 +845,7 @@ export namespace Parser {
     function encapsulatedVariable() {
         switch (peek().tokenType) {
             case TokenType.EncapsulatedAndWhitespace:
-                return next(true);
+                return next();
             case TokenType.VariableName:
                 {
                     let t = peek(1);
@@ -936,12 +870,7 @@ export namespace Parser {
         const open = next(); //{
         const vble = variable(variableAtom());
         const close = expect(TokenType.CloseBrace);
-        return Phrase.create(
-            PhraseType.EncapsulatedVariable,
-            nodePackedRange(open)[0],
-            nodePackedRange(close)[1],
-            [open, vble, close]
-        );
+        return phrase(PhraseType.EncapsulatedVariable, [open, vble, close]);
     }
 
     function dollarCurlyOpenEncapsulatedVariable() {
@@ -954,8 +883,7 @@ export namespace Parser {
                 expr = dollarCurlyEncapsulatedDimension();
             } else {
                 const varName = next();
-                const varNameRange = nodePackedRange(varName);
-                expr = Phrase.create(PhraseType.SimpleVariable, varNameRange[0], varNameRange[1], [varName]);
+                expr = phrase(PhraseType.SimpleVariable, [varName]);
             }
         } else if (isExpressionStart(t)) {
             expr = expression(0);
@@ -964,12 +892,7 @@ export namespace Parser {
         }
 
         const close = expect(TokenType.CloseBrace);
-        return Phrase.create(
-            PhraseType.EncapsulatedVariable,
-            nodePackedRange(open)[0],
-            nodePackedRange(close)[1],
-            [open, expr, close]
-        )
+        return phrase(PhraseType.EncapsulatedVariable, [open, expr, close]);
     }
 
     function dollarCurlyEncapsulatedDimension() {
@@ -977,12 +900,7 @@ export namespace Parser {
         const open = next(); // [
         const expr = expression(0);
         const close = expect(TokenType.CloseBracket);
-        return Phrase.create(
-            PhraseType.SubscriptExpression,
-            nodePackedRange(varName)[0],
-            nodePackedRange(close)[1],
-            [varName, open, expr, close]
-        );
+        return phrase(PhraseType.SubscriptExpression, [varName, open, expr, close]);
     }
 
     function encapsulatedDimension() {
@@ -1002,12 +920,7 @@ export namespace Parser {
                 {
                     const minus = next();
                     const intLiteral = expect(TokenType.IntegerLiteral);
-                    expr = Phrase.create(
-                        PhraseType.UnaryOpExpression,
-                        nodePackedRange(minus)[0],
-                        nodePackedRange(intLiteral)[1],
-                        [minus, intLiteral]
-                    );
+                    expr = phrase(PhraseType.UnaryOpExpression, [minus, intLiteral]);
                 }
                 break;
             default:
@@ -1017,37 +930,21 @@ export namespace Parser {
         }
 
         const close = expect(TokenType.CloseBracket);
-        return Phrase.create(
-            PhraseType.SubscriptExpression,
-            nodePackedRange(sv)[0],
-            nodePackedRange(close)[1],
-            [sv, open, expr, close]
-        );
-
+        return phrase(PhraseType.SubscriptExpression, [sv, open, expr, close]);
     }
 
     function encapsulatedProperty() {
         const sv = simpleVariable();
         const arrow = next(); //->
         const name = expect(TokenType.Name);
-        return Phrase.create(
-            PhraseType.PropertyAccessExpression,
-            nodePackedRange(sv)[0],
-            nodePackedRange(name)[1],
-            [sv, arrow, name]
-        );
+        return phrase(PhraseType.PropertyAccessExpression, [sv, arrow, name]);
     }
 
     function heredocStringLiteral() {
         const startHeredoc = next();
         const list = encapsulatedVariableList(TokenType.EndHeredoc);
         const endHeredoc = expect(TokenType.EndHeredoc);
-        return Phrase.create(
-            PhraseType.HeredocStringLiteral,
-            nodePackedRange(startHeredoc)[0],
-            nodePackedRange(endHeredoc)[1],
-            [startHeredoc, list, endHeredoc]
-        );
+        return phrase(PhraseType.HeredocStringLiteral, [startHeredoc, list, endHeredoc]);
     }
 
     function anonymousClassDeclaration() {
@@ -1055,18 +952,13 @@ export namespace Parser {
         const body = typeDeclarationBody(
             PhraseType.ClassDeclarationBody, isClassMemberStart, classMemberDeclarationList
         );
-        return Phrase.create(
-            PhraseType.AnonymousClassDeclaration,
-            nodePackedRange(header)[0],
-            nodePackedRange(body)[1],
-            [header, body]
-        )
+        return phrase(PhraseType.AnonymousClassDeclaration, [header, body]);
     }
 
     function anonymousClassDeclarationHeader() {
-        const classToken = next(); //class
+        const children: (Phrase | Token)[] = [];
+        children.push(next()); //class
         const open = optional(TokenType.OpenParenthesis);
-        const children: (Phrase | Token)[] = [classToken];
 
         if (open) {
             children.push(open);
@@ -1084,23 +976,13 @@ export namespace Parser {
             children.push(classInterfaceClause());
         }
 
-        return Phrase.create(
-            PhraseType.AnonymousClassDeclarationHeader,
-            nodePackedRange(classToken)[0],
-            nodePackedRange(children[children.length - 1])[1],
-            children
-        );
+        return phrase(PhraseType.AnonymousClassDeclarationHeader, children);
     }
 
     function classInterfaceClause() {
         const keyword = next(); //implements
         const list = qualifiedNameList([TokenType.OpenBrace]);
-        return Phrase.create(
-            PhraseType.ClassInterfaceClause,
-            nodePackedRange(keyword)[0],
-            nodePackedRange(list)[1],
-            [keyword, list]
-        );
+        return phrase(PhraseType.ClassInterfaceClause, [keyword, list]);
     }
 
     function classMemberDeclarationList() {
@@ -1134,15 +1016,12 @@ export namespace Parser {
     }
 
     function docBlock() {
-        let start: number, end: number;
         const t = next(); //DocumentComment
-        [start, end] = nodePackedRange(t);
-        return Phrase.create(PhraseType.DocBlock, start, end, [t]);
+        return phrase(PhraseType.DocBlock, [t]);
     }
 
     function classMemberDeclaration() {
 
-        let p = start(PhraseType.ErrorClassMemberDeclaration);
         let t = peek();
 
         switch (t.tokenType) {
@@ -1165,9 +1044,7 @@ export namespace Parser {
                         return classConstDeclaration(modifiers);
                     } else {
                         //error
-                        p.children.push(modifiers);
-                        error();
-                        return end();
+                        return error([modifiers], t);
                     }
                 }
             case TokenType.Function:
@@ -1190,32 +1067,27 @@ export namespace Parser {
     }
 
     function traitUseClause() {
-        const use = next(); //use
-        const list = qualifiedNameList([TokenType.Semicolon, TokenType.OpenBrace]);
+        const use = next();
+        const nameList = qualifiedNameList([TokenType.Semicolon, TokenType.OpenBrace]);
         const spec = traitUseSpecification();
-        return Phrase.create(
-            PhraseType.TraitUseClause,
-            nodePackedRange(use)[0],
-            nodePackedRange(spec)[1],
-            [use, list, spec]
-        );
+        return phrase(PhraseType.TraitUseClause, [use, nameList, spec]);
     }
 
     function traitUseSpecification() {
         const t = expectOneOf([TokenType.Semicolon, TokenType.OpenBrace]) as Token;
-        let start: number, end: number;
-        [start, end] = nodePackedRange(t);
 
-        if (t && t.tokenType === TokenType.OpenBrace) {
-            let list: Phrase;
-            if (isTraitAdaptationStart(peek())) {
-                list = traitAdaptationList();
-            }
-            const close = expect(TokenType.CloseBrace);
-            return Phrase.create(PhraseType.TraitUseSpecification, start, nodePackedRange(close)[1], list ? [t, list, close] : [t, close]);
+        if (t.tokenType !== TokenType.OpenBrace) {
+            return phrase(PhraseType.TraitUseSpecification, [t]);
         }
 
-        return Phrase.create(PhraseType.TraitUseSpecification, start, end, [t]);
+        if (!isTraitAdaptationStart(peek())) {
+            const close = expect(TokenType.CloseBrace);
+            return phrase(PhraseType.TraitUseSpecification, [t, close]);
+        }
+
+        const adaptList = traitAdaptationList();
+        const close = expect(TokenType.CloseBrace);
+        return phrase(PhraseType.TraitUseSpecification, [t, adaptList, close]);
     }
 
     function traitAdaptationList() {
@@ -1240,7 +1112,7 @@ export namespace Parser {
 
     function traitAdaptation() {
 
-        let p = start(PhraseType.ErrorTraitAdaptation);
+        const children: (Phrase | Token)[] = [];
         let t = peek();
         let t2 = peek(1);
 
@@ -1249,71 +1121,55 @@ export namespace Parser {
             (t.tokenType === TokenType.Name &&
                 (t2.tokenType === TokenType.ColonColon || t2.tokenType === TokenType.Backslash))) {
 
-            p.children.push(methodReference());
+            children.push(methodReference());
 
             if (peek().tokenType === TokenType.InsteadOf) {
-                next();
-                return traitPrecedence(p);
+                children.push(next());
+                return traitPrecedence(children);
             }
 
         } else if (t.tokenType === TokenType.Name || isSemiReservedToken(t)) {
-
-            let methodRef = start(PhraseType.MethodReference);
-            methodRef.children.push(identifier());
-            p.children.push(end());
+            const ident = identifier();
+            children.push(phrase(PhraseType.MethodReference, [ident]));
         } else {
             //error
-            error();
-            return end();
+            return error([], t);
         }
 
-        return traitAlias(p);
-
-
+        return traitAlias(children);
     }
 
-    function traitAlias(p: Phrase) {
-
-        p.phraseType = PhraseType.TraitAlias;
-        expect(TokenType.As);
-
+    function traitAlias(children: (Phrase | Token)[]) {
+        children.push(expect(TokenType.As));
         let t = peek();
 
         if (t.tokenType === TokenType.Name || isReservedToken(t)) {
-            p.children.push(identifier());
+            children.push(identifier());
         } else if (isMemberModifier(t)) {
-            next();
+            children.push(next());
             t = peek();
             if (t.tokenType === TokenType.Name || isSemiReservedToken(t)) {
-                p.children.push(identifier());
+                children.push(identifier());
             }
         } else {
-            error();
+            children.push(error([], t));
         }
 
-        expect(TokenType.Semicolon);
-        return end();
-
+        children.push(expect(TokenType.Semicolon));
+        return phrase(PhraseType.TraitAlias, children);
     }
 
-    function traitPrecedence(p: Phrase) {
-        p.phraseType = PhraseType.TraitPrecedence;
-        const list = qualifiedNameList([TokenType.Semicolon]);
-        const semicolon = expect(TokenType.Semicolon);
-        return end();
-
+    function traitPrecedence(children: (Phrase | Token)[]) {
+        children.push(qualifiedNameList([TokenType.Semicolon]));
+        children.push(expect(TokenType.Semicolon));
+        return phrase(PhraseType.TraitPrecedence, children);
     }
 
     function methodReference() {
         const name = qualifiedName();
         const op = expect(TokenType.ColonColon);
         const ident = identifier();
-        return Phrase.create(
-            PhraseType.MethodReference,
-            nodePackedRange(name)[0],
-            nodePackedRange(ident)[1],
-            [name, op, ident]
-        );
+        return phrase(PhraseType.MethodReference, [name, op, ident]);
     }
 
     function methodDeclarationHeader(memberModifers?: Phrase) {
@@ -1345,29 +1201,17 @@ export namespace Parser {
             children.push(returnType());
         }
 
-        return Phrase.create(
-            PhraseType.MethodDeclarationHeader,
-            nodePackedRange(children[0])[0],
-            nodePackedRange(children[children.length - 1])[1],
-            children
-        );
-
+        return phrase(PhraseType.MethodDeclarationHeader, children);
     }
 
     function methodDeclaration(memberModifers?: Phrase) {
         const header = methodDeclarationHeader(memberModifers);
         const body = methodDeclarationBody();
-        return Phrase.create(
-            PhraseType.MethodDeclaration,
-            nodePackedRange(header)[0],
-            nodePackedRange(body)[1],
-            [header, body]
-        );
+        return phrase(PhraseType.MethodDeclaration, [header, body]);
     }
 
     function methodDeclarationBody() {
         let body: Phrase | Token;
-        let start: number, end: number;
 
         if (peek().tokenType === TokenType.Semicolon) {
             body = next();
@@ -1375,13 +1219,7 @@ export namespace Parser {
             body = compoundStatement();
         }
 
-        [start, end] = nodePackedRange(body);
-        return Phrase.create(
-            PhraseType.MethodDeclarationBody,
-            start,
-            end,
-            [body]
-        );
+        return phrase(PhraseType.MethodDeclarationBody, [body]);
     }
 
     function identifier() {
@@ -1393,15 +1231,7 @@ export namespace Parser {
             ident = error([], ident);
         }
 
-        let start: number, end: number;
-        [start, end] = nodePackedRange(ident);
-
-        return Phrase.create(
-            PhraseType.Identifier,
-            start,
-            end,
-            [ident]
-        );
+        return phrase(PhraseType.Identifier, [ident]);
     }
 
     function interfaceDeclaration() {
@@ -1409,29 +1239,20 @@ export namespace Parser {
         const body = typeDeclarationBody(
             PhraseType.InterfaceDeclarationBody, isClassMemberStart, interfaceMemberDeclarations
         );
-        return Phrase.create(
-            PhraseType.InterfaceDeclaration,
-            nodePackedRange(header)[0],
-            nodePackedRange(body)[1],
-            [header, body]
-        );
+        return phrase(PhraseType.InterfaceDeclaration, [header, body]);
     }
 
     function typeDeclarationBody<T extends Phrase>(phraseType: PhraseType, elementStartPredicate: Predicate, listFunction: () => T) {
         const open = expect(TokenType.OpenBrace);
-        let list: Phrase | Token;
 
-        if (elementStartPredicate(peek())) {
-            list = listFunction();
+        if (!elementStartPredicate(peek())) {
+            const close = expect(TokenType.CloseBrace);
+            return phrase(phraseType, [open, close]);
         }
 
+        const l = listFunction();
         const close = expect(TokenType.CloseBrace);
-        return Phrase.create(
-            phraseType,
-            nodePackedRange(open)[0],
-            nodePackedRange(close)[1],
-            list ? [open, list, close] : [open, close]
-        );
+        return phrase(phraseType, [open, l, close]);
     }
 
     function interfaceMemberDeclarations() {
@@ -1448,29 +1269,19 @@ export namespace Parser {
     function interfaceDeclarationHeader() {
         const interfaceToken = next();
         const name = expect(TokenType.Name);
-        let base: Phrase | Token;
 
-        if (peek().tokenType === TokenType.Extends) {
-            base = interfaceBaseClause();
+        if (peek().tokenType !== TokenType.Extends) {
+            return phrase(PhraseType.InterfaceDeclarationHeader, [interfaceToken, name]);
         }
 
-        return Phrase.create(
-            PhraseType.InterfaceDeclarationHeader,
-            nodePackedRange(interfaceToken)[0],
-            nodePackedRange(base || name)[1],
-            base ? [interfaceToken, name, base] : [interfaceToken, name]
-        );
+        const base = interfaceBaseClause();
+        return phrase(PhraseType.InterfaceDeclarationHeader, [interfaceToken, name, base]);
     }
 
     function interfaceBaseClause() {
         const ext = next(); //extends
         const list = qualifiedNameList([TokenType.OpenBrace]);
-        return Phrase.create(
-            PhraseType.InterfaceBaseClause,
-            nodePackedRange(ext)[0],
-            nodePackedRange(list)[1],
-            [ext, list]
-        );
+        return phrase(PhraseType.InterfaceBaseClause, [ext, list]);
     }
 
     function traitDeclaration() {
@@ -1478,23 +1289,13 @@ export namespace Parser {
         const body = typeDeclarationBody(
             PhraseType.TraitDeclarationBody, isClassMemberStart, traitMemberDeclarations
         );
-        return Phrase.create(
-            PhraseType.TraitDeclaration,
-            nodePackedRange(header)[0],
-            nodePackedRange(body)[1],
-            [header, body]
-        );
+        return phrase(PhraseType.TraitDeclaration, [header, body]);
     }
 
     function traitDeclarationHeader() {
         const traitToken = next(); //trait
         const name = expect(TokenType.Name);
-        return Phrase.create(
-            PhraseType.TraitDeclarationHeader,
-            nodePackedRange(traitToken)[0],
-            nodePackedRange(name)[1],
-            [traitToken, name]
-        );
+        return phrase(PhraseType.TraitDeclarationHeader, [traitToken, name]);
     }
 
     function traitMemberDeclarations() {
@@ -1506,18 +1307,12 @@ export namespace Parser {
             classMemberDeclarationListRecoverSet,
             true
         );
-
     }
 
     function functionDeclaration() {
         const header = functionDeclarationHeader();
         const body = functionDeclarationBody();
-        return Phrase.create(
-            PhraseType.FunctionDeclaration,
-            nodePackedRange(header)[0],
-            nodePackedRange(body)[1],
-            [header, body]
-        );
+        return phrase(PhraseType.FunctionDeclaration, [header, body]);
     }
 
     function functionDeclarationBody() {
@@ -1554,13 +1349,7 @@ export namespace Parser {
             children.push(returnType());
         }
 
-        return Phrase.create(
-            PhraseType.FunctionDeclarationHeader,
-            nodePackedRange(children[0])[0],
-            nodePackedRange(children[children.length - 1])[1],
-            children
-        );
-
+        return phrase(PhraseType.FunctionDeclarationHeader, children);
     }
 
     function isParameterStart(t: Token) {
@@ -1579,12 +1368,7 @@ export namespace Parser {
         const body = typeDeclarationBody(
             PhraseType.ClassDeclarationBody, isClassMemberStart, classMemberDeclarationList
         );
-        return Phrase.create(
-            PhraseType.ClassDeclaration,
-            nodePackedRange(header)[0],
-            nodePackedRange(body)[1],
-            [header, body]
-        );
+        return phrase(PhraseType.ClassDeclaration, [header, body]);
     }
 
     function classDeclarationHeader() {
@@ -1606,40 +1390,27 @@ export namespace Parser {
             children.push(classInterfaceClause());
         }
 
-        return Phrase.create(
-            PhraseType.ClassDeclarationHeader,
-            nodePackedRange(children[0])[0],
-            nodePackedRange(children[children.length - 1])[1],
-            children
-        );
+        return phrase(PhraseType.ClassDeclarationHeader, children);
     }
 
     function classBaseClause() {
         const ext = next(); //extends
         const name = qualifiedName();
-        return Phrase.create(
-            PhraseType.ClassBaseClause,
-            nodePackedRange(ext)[0],
-            nodePackedRange(name)[1],
-            [ext, name]
-        );
+        return phrase(PhraseType.ClassBaseClause, [ext, name]);
     }
 
     function compoundStatement() {
         const open = expect(TokenType.OpenBrace);
-        let list: Phrase | Token;
 
-        if (isStatementStart(peek())) {
-            list = statementList([TokenType.CloseBrace]);
+        if (!isStatementStart(peek())) {
+            const close = expect(TokenType.CloseBrace);
+            return phrase(PhraseType.CompoundStatement, [open, close]);
         }
 
+        const start = nodePackedRange(open)[0];
+        const stmtList = statementList([TokenType.CloseBrace]);
         const close = expect(TokenType.CloseBrace);
-        return Phrase.create(
-            PhraseType.CompoundStatement,
-            nodePackedRange(open)[0],
-            nodePackedRange(close)[1],
-            list ? [open, list, close] : [open, close]
-        );
+        return phrase(PhraseType.CompoundStatement, [open, stmtList, close], [start, nodePackedRange(close)[1]]);
     }
 
     function isFunctionStatic(peek1: Token, peek2: Token) {
@@ -1761,24 +1532,12 @@ export namespace Parser {
             children.push(open);
         }
 
-        return Phrase.create(
-            PhraseType.InlineText,
-            nodePackedRange(children[0])[0],
-            nodePackedRange(children[children.length - 1])[1],
-            children
-        );
+        return phrase(PhraseType.InlineText, children);
     }
 
     function nullStatement() {
         const semicolon = next(); //;
-        let start: number, end: number;
-        [start, end] = nodePackedRange(semicolon);
-        return Phrase.create(
-            PhraseType.NullStatement,
-            start,
-            end,
-            [semicolon]
-        );
+        return phrase(PhraseType.NullStatement, [semicolon]);
     }
 
     function isCatchClauseStart(t: Token) {
@@ -1787,6 +1546,7 @@ export namespace Parser {
 
     function tryStatement() {
         const tryToken = next();
+        const start = nodePackedRange(tryToken)[0];
         const compound = compoundStatement();
 
         let t = peek();
@@ -1802,34 +1562,26 @@ export namespace Parser {
             catchListOrFinally = error([], t);
         }
 
-        let finClause: Phrase | Token;
-        if (peek().tokenType === TokenType.Finally) {
-            finClause = finallyClause();
+        if (peek().tokenType !== TokenType.Finally) {
+            return phrase(PhraseType.TryStatement, [tryToken, compound, catchListOrFinally], [start, nodePackedRange(catchListOrFinally)[1]]);
         }
 
-        return Phrase.create(
-            PhraseType.TryStatement,
-            nodePackedRange(tryToken)[0],
-            nodePackedRange(finClause || catchListOrFinally)[1],
-            finClause ? [tryToken, compound, catchListOrFinally, finClause] : [tryToken, compound, catchListOrFinally]
-        );
+        const finClause = finallyClause();
+        return phrase(PhraseType.TryStatement, [tryToken, compound, catchListOrFinally, finClause], [start, nodePackedRange(finClause)[1]]);
     }
 
     function finallyClause() {
         const fin = next(); //finally
+        const start = nodePackedRange(fin)[0];
         const stmt = compoundStatement();
-        return Phrase.create(
-            PhraseType.FinallyClause,
-            nodePackedRange(fin)[0],
-            nodePackedRange(stmt)[1],
-            [fin, stmt]
-        );
+        return phrase(PhraseType.FinallyClause, [fin, stmt], [start, nodePackedRange(stmt)[1]]);
     }
 
     function catchClause() {
         const catchToken = next();
+        const start = nodePackedRange(catchToken)[0];
         const open = expect(TokenType.OpenParenthesis);
-        const list = delimitedList(
+        const delimList = delimitedList(
             PhraseType.CatchNameList,
             qualifiedName,
             isQualifiedNameStart,
@@ -1839,12 +1591,7 @@ export namespace Parser {
         const varName = expect(TokenType.VariableName);
         const close = expect(TokenType.CloseParenthesis);
         const stmt = compoundStatement();
-        return Phrase.create(
-            PhraseType.CatchClause,
-            nodePackedRange(catchToken)[0],
-            nodePackedRange(stmt)[1],
-            [catchToken, open, list, varName, close, stmt]
-        );
+        return phrase(PhraseType.CatchClause, [catchToken, open, delimList, varName, close, stmt], [start, nodePackedRange(stmt)[1]]);
     }
 
     function declareDirective() {
@@ -1883,6 +1630,7 @@ export namespace Parser {
 
     function switchStatement() {
         const keyword = next(); //switch
+        const start = nodePackedRange(keyword)[0];
         const open = expect(TokenType.OpenParenthesis);
         const expr = expression(0);
         const close = expect(TokenType.CloseParenthesis);
@@ -1903,13 +1651,17 @@ export namespace Parser {
             return phrase(
                 PhraseType.SwitchStatement,
                 stmtList ? [keyword, open, expr, close, colonOrBrace, stmtList, endSwitch, semicolon] :
-                    [keyword, open, expr, close, colonOrBrace, endSwitch, semicolon]);
+                    [keyword, open, expr, close, colonOrBrace, endSwitch, semicolon],
+                [start, nodePackedRange(semicolon)[1]]
+            );
         } else {
             const braceClose = expect(TokenType.CloseBrace);
             return phrase(
                 PhraseType.SwitchStatement,
                 stmtList ? [keyword, open, expr, close, colonOrBrace, stmtList, braceClose] :
-                    [keyword, open, expr, close, colonOrBrace, braceClose]);
+                    [keyword, open, expr, close, colonOrBrace, braceClose],
+                [start, nodePackedRange(braceClose)[1]]
+            );
         }
     }
 
@@ -1947,26 +1699,28 @@ export namespace Parser {
 
     function caseStatement(breakOn: TokenType[]) {
         const keyword = next(); //case
+        const start = nodePackedRange(keyword)[0];
         const expr = expression(0);
         const colonOrSemicolon = expectOneOf([TokenType.Colon, TokenType.Semicolon]);
 
         if (!isStatementStart(peek())) {
-            return phrase(PhraseType.CaseStatement, [keyword, expr, colonOrSemicolon]);
+            return phrase(PhraseType.CaseStatement, [keyword, expr, colonOrSemicolon], [start, nodePackedRange(colonOrSemicolon)[1]]);
         }
 
         const stmtList = statementList(breakOn);
-        return phrase(PhraseType.CaseStatement, [keyword, expr, colonOrSemicolon, stmtList]);
+        return phrase(PhraseType.CaseStatement, [keyword, expr, colonOrSemicolon, stmtList], [start, nodePackedRange(stmtList)[1]]);
     }
 
     function defaultStatement(breakOn: TokenType[]) {
         const keyword = next(); //default
+        const start = nodePackedRange(keyword)[0];
         const colonOrSemicolon = expectOneOf([TokenType.Colon, TokenType.Semicolon]);
         if (!isStatementStart(peek())) {
-            return phrase(PhraseType.CaseStatement, [keyword, colonOrSemicolon]);
+            return phrase(PhraseType.CaseStatement, [keyword, colonOrSemicolon], [start, nodePackedRange(colonOrSemicolon)[1]]);
         }
 
         const stmtList = statementList(breakOn);
-        return phrase(PhraseType.CaseStatement, [keyword, colonOrSemicolon, stmtList]);
+        return phrase(PhraseType.CaseStatement, [keyword, colonOrSemicolon, stmtList], [start, nodePackedRange(stmtList)[1]]);
     }
 
     function namedLabelStatement() {
@@ -2011,6 +1765,7 @@ export namespace Parser {
 
     function foreachStatement() {
         const foreachToken = next(); //foreach
+        const start = nodePackedRange(foreachToken)[0];
         const open = expect(TokenType.OpenParenthesis);
         const collection = foreachCollection();
         const asToken = expect(TokenType.As);
@@ -2032,21 +1787,24 @@ export namespace Parser {
             return phrase(
                 PhraseType.ForeachStatement,
                 val ? [foreachToken, open, collection, asToken, keyOrValue, val, close, colon, stmtList, endForeach, semicolon] :
-                    [foreachToken, open, collection, asToken, keyOrValue, close, colon, stmtList, endForeach, semicolon]
+                    [foreachToken, open, collection, asToken, keyOrValue, close, colon, stmtList, endForeach, semicolon],
+                [start, nodePackedRange(semicolon)[1]]
             );
         } else if (isStatementStart(t)) {
             const stmt = statement();
             return phrase(
                 PhraseType.ForeachStatement,
                 val ? [foreachToken, open, collection, asToken, keyOrValue, val, close, stmt] :
-                    [foreachToken, open, collection, asToken, keyOrValue, close, stmt]
+                    [foreachToken, open, collection, asToken, keyOrValue, close, stmt],
+                [start, nodePackedRange(stmt)[1]]
             );
         } else {
             const err = error([], t);
             return phrase(
                 PhraseType.ForeachStatement,
                 val ? [foreachToken, open, collection, asToken, keyOrValue, val, close, err] :
-                    [foreachToken, open, collection, asToken, keyOrValue, close, err]
+                    [foreachToken, open, collection, asToken, keyOrValue, close, err],
+                [start, nodePackedRange(err)[1]]
             );
         }
     }
@@ -2213,7 +1971,9 @@ export namespace Parser {
 
     function forStatement() {
         const children: (Phrase | Token)[] = [];
-        children.push(next()); //for
+        const forToken = next();
+        const start = nodePackedRange(forToken)[0];
+        children.push(forToken);
         children.push(expect(TokenType.OpenParenthesis));
 
         if (isExpressionStart(peek())) {
@@ -2247,23 +2007,24 @@ export namespace Parser {
             children.push(error([], t));
         }
 
-        return phrase(PhraseType.ForStatement, children);
-
+        return phrase(PhraseType.ForStatement, children, [start, nodePackedRange(children[children.length - 1])[1]]);
     }
 
     function doStatement() {
         const doToken = next(); // do
+        const start = nodePackedRange(doToken)[0];
         const stmt = statement();
         const whileToken = expect(TokenType.While);
         const open = expect(TokenType.OpenParenthesis);
         const expr = expression(0);
         const close = expect(TokenType.CloseParenthesis);
         const semicolon = expect(TokenType.Semicolon);
-        return phrase(PhraseType.DoStatement, [doToken, stmt, whileToken, open, expr, close, semicolon]);
+        return phrase(PhraseType.DoStatement, [doToken, stmt, whileToken, open, expr, close, semicolon], [start, nodePackedRange(semicolon)[1]]);
     }
 
     function whileStatement() {
         const whileToken = next(); //while
+        const start = nodePackedRange(whileToken)[0];
         const open = expect(TokenType.OpenParenthesis);
         const expr = expression(0);
         const close = expect(TokenType.CloseParenthesis);
@@ -2277,54 +2038,61 @@ export namespace Parser {
             const semicolon = expect(TokenType.Semicolon);
             return phrase(
                 PhraseType.WhileStatement,
-                [whileToken, open, expr, close, colon, stmtList, endWhile, semicolon]
+                [whileToken, open, expr, close, colon, stmtList, endWhile, semicolon],
+                [start, nodePackedRange(semicolon)[1]]
             );
         } else if (isStatementStart(t)) {
             const stmt = statement();
             return phrase(
                 PhraseType.WhileStatement,
-                [whileToken, open, expr, close, stmt]
+                [whileToken, open, expr, close, stmt],
+                [start, nodePackedRange(stmt)[1]]
             );
         } else {
             //error
             const err = error([], t);
             return phrase(
                 PhraseType.WhileStatement,
-                [whileToken, open, expr, close, err]
+                [whileToken, open, expr, close, err],
+                [start, nodePackedRange(err)[1]]
             );
         }
     }
 
     function elseIfClause1() {
         const keyword = next(); //elseif
+        const start = nodePackedRange(keyword)[0];
         const open = expect(TokenType.OpenParenthesis);
         const expr = expression(0);
         const close = expect(TokenType.CloseParenthesis);
         const stmt = statement();
-        return phrase(PhraseType.ElseIfClause, [keyword, open, expr, close, stmt]);
+        return phrase(PhraseType.ElseIfClause, [keyword, open, expr, close, stmt], [start, nodePackedRange(stmt)[1]]);
     }
 
     function elseIfClause2() {
         const keyword = next(); //elseif
+        const start = nodePackedRange(keyword)[0];
         const open = expect(TokenType.OpenParenthesis);
         const expr = expression(0);
         const close = expect(TokenType.CloseParenthesis);
         const colon = expect(TokenType.Colon);
         const stmtList = statementList([TokenType.EndIf, TokenType.Else, TokenType.ElseIf]);
-        return phrase(PhraseType.ElseIfClause, [keyword, open, expr, close, colon, stmtList]);
+        return phrase(PhraseType.ElseIfClause, [keyword, open, expr, close, colon, stmtList], [start, nodePackedRange(stmtList)[1]]);
     }
 
     function elseClause1() {
         const keyword = next(); //else
+        const start = nodePackedRange(keyword)[0];
         const stmt = statement();
-        return phrase(PhraseType.ElseClause, [keyword, stmt]);
+        return phrase(PhraseType.ElseClause, [keyword, stmt], [start, nodePackedRange(stmt)[1]]);
     }
 
     function elseClause2() {
         const keyword = next(); //else
+        const start = nodePackedRange(keyword)[0];
         const colon = expect(TokenType.Colon);
         const stmtList = statementList([TokenType.EndIf]);
-        return phrase(PhraseType.ElseClause, [keyword, colon, stmtList]);
+        return phrase(PhraseType.ElseClause, [keyword, colon, stmtList], [start, nodePackedRange(stmtList)[1]]);
     }
 
     function isElseIfClauseStart(t: Token) {
@@ -2334,7 +2102,9 @@ export namespace Parser {
     function ifStatement() {
 
         const children: (Phrase | Token)[] = [];
-        children.push(next()); //if
+        const ifToken = next();
+        const start = nodePackedRange(ifToken)[0];
+        children.push(ifToken);
         children.push(expect(TokenType.OpenParenthesis));
         children.push(expression(0));
         children.push(expect(TokenType.CloseParenthesis));
@@ -2373,8 +2143,7 @@ export namespace Parser {
             children.push(expect(TokenType.Semicolon));
         }
 
-        return phrase(PhraseType.IfStatement, children);
-
+        return phrase(PhraseType.IfStatement, children, [start, nodePackedRange(children[children.length - 1])[1]]);
     }
 
     function expressionStatement() {
@@ -3370,9 +3139,10 @@ export namespace Parser {
             return phrase(PhraseType.NamespaceDefinitionBody, [t]);
         }
 
+        const start = nodePackedRange(t)[0];
         const list = statementList([TokenType.CloseBrace]);
         const close = expect(TokenType.CloseBrace);
-        return phrase(PhraseType.NamespaceDefinitionBody, [t, list, close]);
+        return phrase(PhraseType.NamespaceDefinitionBody, [t, list, close], [start, nodePackedRange(close)[1]]);
     }
 
     function namespaceDefinition() {
