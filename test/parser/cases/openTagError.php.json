@@ -1,0 +1,58 @@
+{
+    "phraseType": 157,
+    "children": [
+        {
+            "phraseType": 99,
+            "children": [
+                {
+                    "tokenType": 156,
+                    "offset": 0,
+                    "length": 2,
+                    "modeStack": [
+                        0
+                    ]
+                }
+            ]
+        },
+        {
+            "phraseType": 73,
+            "children": [
+                {
+                    "phraseType": 41,
+                    "children": [
+                        {
+                            "phraseType": 141,
+                            "children": [
+                                {
+                                    "phraseType": 121,
+                                    "children": [
+                                        {
+                                            "tokenType": 83,
+                                            "offset": 2,
+                                            "length": 1,
+                                            "modeStack": [
+                                                1
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "phraseType": 60,
+                    "children": [],
+                    "unexpected": {
+                        "tokenType": 1,
+                        "offset": 3,
+                        "length": 0,
+                        "modeStack": [
+                            1
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

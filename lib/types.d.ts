@@ -54,14 +54,7 @@ export interface Traversable<T extends TreeLike> {
     traverse(visitor: TreeVisitor<T>): TreeVisitor<T>;
 }
 export interface TreeVisitor<T extends TreeLike> {
-    /**
-     * True will halt traverse immediately.
-     * No further functions will be called.
-     */
     haltTraverse?: boolean;
-    /**
-     * Return value determines whether to descend into child nodes
-     */
     preorder?(node: T, spine: T[]): boolean;
     postorder?(node: T, spine: T[]): void;
 }
@@ -122,15 +115,7 @@ export declare class NameIndex<T> {
     addMany(items: T[]): void;
     remove(item: T): void;
     removeMany(items: T[]): void;
-    /**
-     * Matches all items that are prefixed with text
-     * @param text
-     */
     match(text: string): T[];
-    /**
-     * Finds all items that match (case insensitive) text exactly
-     * @param text
-     */
     find(text: string): T[];
     toJSON(): NameIndexNode<T>[];
     fromJSON(data: NameIndexNode<T>[]): void;
@@ -151,4 +136,9 @@ export declare class SortedList<T> {
     remove(compareFn: (t: T) => number): T;
     find(compareFn: (t: T) => number): T;
     private _createCompareClosure(item, cmpFn);
+}
+export declare namespace PackedPosition {
+    function pack(line: number, character: number): number;
+    function line(packedPosition: number): number;
+    function character(packedPosition: number): number;
 }

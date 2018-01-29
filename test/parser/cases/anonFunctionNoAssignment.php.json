@@ -1,0 +1,112 @@
+{
+    "phraseType": 157,
+    "children": [
+        {
+            "phraseType": 99,
+            "children": [
+                {
+                    "tokenType": 156,
+                    "offset": 0,
+                    "length": 6,
+                    "modeStack": [
+                        0
+                    ]
+                }
+            ]
+        },
+        {
+            "phraseType": 73,
+            "children": [
+                {
+                    "phraseType": 4,
+                    "children": [
+                        {
+                            "phraseType": 5,
+                            "children": [
+                                {
+                                    "tokenType": 35,
+                                    "offset": 6,
+                                    "length": 8,
+                                    "modeStack": [
+                                        1
+                                    ]
+                                },
+                                {
+                                    "tokenType": 161,
+                                    "offset": 14,
+                                    "length": 1,
+                                    "modeStack": [
+                                        1
+                                    ]
+                                },
+                                {
+                                    "tokenType": 118,
+                                    "offset": 15,
+                                    "length": 1,
+                                    "modeStack": [
+                                        1
+                                    ]
+                                },
+                                {
+                                    "tokenType": 121,
+                                    "offset": 16,
+                                    "length": 1,
+                                    "modeStack": [
+                                        1
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "tokenType": 161,
+                            "offset": 17,
+                            "length": 1,
+                            "modeStack": [
+                                1
+                            ]
+                        },
+                        {
+                            "phraseType": 87,
+                            "children": [
+                                {
+                                    "tokenType": 116,
+                                    "offset": 18,
+                                    "length": 1,
+                                    "modeStack": [
+                                        1
+                                    ]
+                                },
+                                {
+                                    "tokenType": 161,
+                                    "offset": 19,
+                                    "length": 1,
+                                    "modeStack": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                {
+                                    "tokenType": 119,
+                                    "offset": 20,
+                                    "length": 1,
+                                    "modeStack": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "tokenType": 88,
+                    "offset": 21,
+                    "length": 1,
+                    "modeStack": [
+                        1
+                    ]
+                }
+            ]
+        }
+    ]
+}

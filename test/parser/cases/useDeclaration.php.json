@@ -1,0 +1,123 @@
+{
+    "phraseType": 157,
+    "children": [
+        {
+            "phraseType": 99,
+            "children": [
+                {
+                    "tokenType": 156,
+                    "offset": 0,
+                    "length": 6,
+                    "modeStack": [
+                        0
+                    ]
+                }
+            ]
+        },
+        {
+            "phraseType": 124,
+            "children": [
+                {
+                    "tokenType": 66,
+                    "offset": 6,
+                    "length": 3,
+                    "modeStack": [
+                        1
+                    ]
+                },
+                {
+                    "tokenType": 161,
+                    "offset": 9,
+                    "length": 1,
+                    "modeStack": [
+                        1
+                    ]
+                },
+                {
+                    "phraseType": 123,
+                    "children": [
+                        {
+                            "phraseType": 122,
+                            "children": [
+                                {
+                                    "phraseType": 121,
+                                    "children": [
+                                        {
+                                            "tokenType": 83,
+                                            "offset": 10,
+                                            "length": 3,
+                                            "modeStack": [
+                                                1
+                                            ]
+                                        },
+                                        {
+                                            "tokenType": 147,
+                                            "offset": 13,
+                                            "length": 1,
+                                            "modeStack": [
+                                                1
+                                            ]
+                                        },
+                                        {
+                                            "tokenType": 83,
+                                            "offset": 14,
+                                            "length": 3,
+                                            "modeStack": [
+                                                1
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "tokenType": 161,
+                                    "offset": 17,
+                                    "length": 1,
+                                    "modeStack": [
+                                        1
+                                    ]
+                                },
+                                {
+                                    "phraseType": 119,
+                                    "children": [
+                                        {
+                                            "tokenType": 4,
+                                            "offset": 18,
+                                            "length": 2,
+                                            "modeStack": [
+                                                1
+                                            ]
+                                        },
+                                        {
+                                            "tokenType": 161,
+                                            "offset": 20,
+                                            "length": 1,
+                                            "modeStack": [
+                                                1
+                                            ]
+                                        },
+                                        {
+                                            "tokenType": 83,
+                                            "offset": 21,
+                                            "length": 3,
+                                            "modeStack": [
+                                                1
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "tokenType": 88,
+                    "offset": 24,
+                    "length": 1,
+                    "modeStack": [
+                        1
+                    ]
+                }
+            ]
+        }
+    ]
+}

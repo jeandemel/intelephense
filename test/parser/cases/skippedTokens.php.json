@@ -1,0 +1,47 @@
+{
+    "phraseType": 157,
+    "children": [
+        {
+            "phraseType": 99,
+            "children": [
+                {
+                    "tokenType": 156,
+                    "offset": 0,
+                    "length": 6,
+                    "modeStack": [
+                        0
+                    ]
+                }
+            ]
+        },
+        {
+            "phraseType": 60,
+            "children": [
+                {
+                    "tokenType": 120,
+                    "offset": 6,
+                    "length": 1,
+                    "modeStack": [
+                        1
+                    ]
+                },
+                {
+                    "tokenType": 93,
+                    "offset": 7,
+                    "length": 1,
+                    "modeStack": [
+                        1
+                    ]
+                }
+            ],
+            "unexpected": {
+                "tokenType": 120,
+                "offset": 6,
+                "length": 1,
+                "modeStack": [
+                    1
+                ]
+            }
+        }
+    ]
+}

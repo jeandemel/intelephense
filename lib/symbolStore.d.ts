@@ -49,18 +49,7 @@ export declare class SymbolStore {
         _symbolCount: number;
     };
     fromJSON(data: any): void;
-    /**
-     * Finds all indexed symbols that match text exactly.
-     * Case sensitive for constants and variables and insensitive for
-     * classes, traits, interfaces, functions, methods
-     * @param text
-     * @param filter
-     */
     find(text: string, filter?: Predicate<PhpSymbol>): PhpSymbol[];
-    /**
-     * matches indexed symbols where symbol keys begin with text.
-     * Case insensitive
-     */
     match(text: string, filter?: Predicate<PhpSymbol>): PhpSymbol[];
     findSymbolsByReference(ref: Reference, memberMergeStrategy?: MemberMergeStrategy): PhpSymbol[];
     findMembers(scope: string, memberMergeStrategy: MemberMergeStrategy, predicate?: Predicate<PhpSymbol>): PhpSymbol[];
@@ -71,10 +60,6 @@ export declare class SymbolStore {
     private _classOrInterfaceFilter(s);
     private _classInterfaceTraitFilter(s);
     private _indexSymbols(root);
-    /**
-     * No vars, params or symbols with use modifier
-     * @param s
-     */
     private _indexFilter(s);
     private _symbolKeys(s);
 }

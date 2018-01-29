@@ -9,12 +9,6 @@ export declare class ReferenceProvider {
     refStore: ReferenceStore;
     constructor(documentStore: ParsedDocumentStore, symbolStore: SymbolStore, refStore: ReferenceStore);
     provideReferenceLocations(uri: string, position: Position, referenceContext: ReferenceContext): Promise<Location[]>;
-    /**
-     *
-     * @param symbols must be base symbols where kind is method, class const or prop
-     * @param table
-     * @param includeDeclaration
-     */
     provideReferences(symbols: PhpSymbol[], table: ReferenceTable, includeDeclaration: boolean): Promise<Reference[]>;
     private _provideReferences;
     private _methodReferences(symbol, table);

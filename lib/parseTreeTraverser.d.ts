@@ -19,15 +19,8 @@ export declare class ParseTreeTraverser extends TreeTraverser<Phrase | Token> {
     readonly reference: Reference;
     readonly scope: PhpSymbol;
     readonly nameResolver: NameResolver;
-    /**
-     * Traverses to the token to the left of position
-     * @param pos
-     */
     position(pos: Position): Token;
     clone(): ParseTreeTraverser;
-    /**
-     * True if current node is the name part of a declaration
-     */
     readonly isDeclarationName: boolean;
     private _isDeclarationPhrase(node);
 }

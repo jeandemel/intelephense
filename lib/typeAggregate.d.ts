@@ -21,11 +21,6 @@ export declare class TypeAggregate {
     firstMember(predicate: Predicate<PhpSymbol>): PhpSymbol;
     members(mergeStrategy: MemberMergeStrategy, predicate?: Predicate<PhpSymbol>): PhpSymbol[];
     private _resolveThisAndStaticReturnType(members, name);
-    /**
-     * root type should be first element of associated array
-     * @param associated
-     * @param predicate
-     */
     private _classMembers(associated, strategy, predicate?);
     private _interfaceMembers(interfaces, predicate?);
     private _traitMembers(traits, predicate?);

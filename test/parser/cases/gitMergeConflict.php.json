@@ -1,0 +1,95 @@
+{
+    "phraseType": 157,
+    "children": [
+        {
+            "phraseType": 99,
+            "children": [
+                {
+                    "tokenType": 156,
+                    "offset": 0,
+                    "length": 6,
+                    "modeStack": [
+                        0
+                    ]
+                }
+            ]
+        },
+        {
+            "phraseType": 60,
+            "children": [
+                {
+                    "tokenType": 161,
+                    "offset": 6,
+                    "length": 1,
+                    "modeStack": [
+                        1
+                    ]
+                },
+                {
+                    "tokenType": 106,
+                    "offset": 7,
+                    "length": 2,
+                    "modeStack": [
+                        1
+                    ]
+                },
+                {
+                    "tokenType": 106,
+                    "offset": 9,
+                    "length": 2,
+                    "modeStack": [
+                        1
+                    ]
+                },
+                {
+                    "tokenType": 154,
+                    "offset": 11,
+                    "length": 9,
+                    "modeStack": [
+                        1
+                    ]
+                },
+                {
+                    "tokenType": 84,
+                    "offset": 20,
+                    "length": 4,
+                    "modeStack": [
+                        5
+                    ]
+                },
+                {
+                    "tokenType": 80,
+                    "offset": 24,
+                    "length": 14,
+                    "modeStack": [
+                        5
+                    ]
+                },
+                {
+                    "tokenType": 84,
+                    "offset": 38,
+                    "length": 4,
+                    "modeStack": [
+                        5
+                    ]
+                },
+                {
+                    "tokenType": 80,
+                    "offset": 42,
+                    "length": 24,
+                    "modeStack": [
+                        5
+                    ]
+                }
+            ],
+            "unexpected": {
+                "tokenType": 106,
+                "offset": 7,
+                "length": 2,
+                "modeStack": [
+                    1
+                ]
+            }
+        }
+    ]
+}

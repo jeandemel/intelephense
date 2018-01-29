@@ -1,0 +1,89 @@
+{
+    "phraseType": 157,
+    "children": [
+        {
+            "phraseType": 99,
+            "children": [
+                {
+                    "tokenType": 156,
+                    "offset": 0,
+                    "length": 6,
+                    "modeStack": [
+                        0
+                    ]
+                }
+            ]
+        },
+        {
+            "tokenType": 161,
+            "offset": 6,
+            "length": 4,
+            "modeStack": [
+                1
+            ]
+        },
+        {
+            "phraseType": 73,
+            "children": [
+                {
+                    "phraseType": 155,
+                    "children": [
+                        {
+                            "phraseType": 156,
+                            "children": [
+                                {
+                                    "tokenType": 84,
+                                    "offset": 10,
+                                    "length": 6,
+                                    "modeStack": [
+                                        1
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "tokenType": 161,
+                            "offset": 16,
+                            "length": 1,
+                            "modeStack": [
+                                1
+                            ]
+                        },
+                        {
+                            "tokenType": 85,
+                            "offset": 17,
+                            "length": 1,
+                            "modeStack": [
+                                1
+                            ]
+                        },
+                        {
+                            "tokenType": 161,
+                            "offset": 18,
+                            "length": 1,
+                            "modeStack": [
+                                1
+                            ]
+                        },
+                        {
+                            "tokenType": 82,
+                            "offset": 19,
+                            "length": 1,
+                            "modeStack": [
+                                1
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "tokenType": 88,
+                    "offset": 20,
+                    "length": 1,
+                    "modeStack": [
+                        1
+                    ]
+                }
+            ]
+        }
+    ]
+}

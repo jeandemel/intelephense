@@ -59,10 +59,6 @@ export declare namespace PhpSymbol {
     function hasParameters(s: PhpSymbol): boolean;
     function notFqn(text: string): string;
     function namespace(fqn: string): string;
-    /**
-     * Shallow clone
-     * @param s
-     */
     function clone(s: PhpSymbol): PhpSymbol;
     function type(s: PhpSymbol): string;
     function setScope(symbols: PhpSymbol[], scope: string): PhpSymbol[];
@@ -70,9 +66,5 @@ export declare namespace PhpSymbol {
     function filterChildren(parent: PhpSymbol, fn: Predicate<PhpSymbol>): PhpSymbol[];
     function findChild(parent: PhpSymbol, fn: Predicate<PhpSymbol>): PhpSymbol;
     function isAssociated(symbol: PhpSymbol, name: string): PhpSymbol;
-    /**
-     * uniqueness determined by name and symbol kind
-     * @param symbol
-     */
     function unique(symbols: PhpSymbol[]): PhpSymbol[];
 }

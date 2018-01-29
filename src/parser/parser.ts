@@ -396,11 +396,9 @@ export namespace Parser {
     function list(phraseType: PhraseType, elementFunction: () => Phrase | Token,
         elementStartPredicate: Predicate, breakOn?: TokenType[], recoverSet?: TokenType[], allowDocComment?: boolean) {
 
-        let t = peek(0, allowDocComment);
+        let t:Token;
         let listRecoverSet = recoverSet ? recoverSet.slice(0) : [];
         let children: (Phrase | Token)[] = [];
-        let start = Lexer.tokenPackedRange(t)[0];
-        let end = start;
 
         if (breakOn) {
             Array.prototype.push.apply(listRecoverSet, breakOn);
@@ -408,11 +406,13 @@ export namespace Parser {
 
         recoverSetStack.push(listRecoverSet);
 
-        while (!breakOn || breakOn.indexOf(t.tokenType) < 0) {
+        while (true) {
 
+            t = peek(0, allowDocComment);
+            
             if (elementStartPredicate(t)) {
                 children.push(elementFunction());
-            } else if (!breakOn) {
+            } else if (!breakOn || breakOn.indexOf(t.tokenType) > -1) {
                 break;
             } else {
                 //error
@@ -430,8 +430,6 @@ export namespace Parser {
                     }
                 }
             }
-
-            t = peek(0, allowDocComment);
 
         }
 
@@ -524,6 +522,8 @@ export namespace Parser {
 
             if (binaryPhraseType === PhraseType.TernaryExpression) {
                 lhs = ternaryExpression(lhs);
+                op = peek();
+                binaryPhraseType = binaryOpToPhraseType(op);
                 continue;
             }
 
@@ -536,7 +536,7 @@ export namespace Parser {
                 binaryPhraseType === PhraseType.SimpleAssignmentExpression &&
                 peek().tokenType === TokenType.Ampersand
             ) {
-                let ampersand = next();
+                const ampersand = next();
                 rhs = expression(precedence);
                 lhs = phrase(PhraseType.ByRefAssignmentExpression, [lhs, op, ampersand, rhs]);
             } else {
@@ -1016,13 +1016,13 @@ export namespace Parser {
     }
 
     function docBlock() {
-        const t = next(); //DocumentComment
+        const t = next(true); //DocumentComment
         return phrase(PhraseType.DocBlock, [t]);
     }
 
     function classMemberDeclaration() {
 
-        let t = peek();
+        let t = peek(0, true);
 
         switch (t.tokenType) {
             case TokenType.DocumentComment:
@@ -1428,7 +1428,7 @@ export namespace Parser {
 
     function statement() {
 
-        let t = peek();
+        let t = peek(0, true);
 
         switch (t.tokenType) {
             case TokenType.DocumentComment:
