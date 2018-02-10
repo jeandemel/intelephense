@@ -168,7 +168,10 @@ export namespace Parser {
         TokenType.Throw,
         TokenType.Goto,
         TokenType.Semicolon,
-        TokenType.CloseTag
+        TokenType.CloseTag,
+        TokenType.OpenTagEcho,
+        TokenType.Text,
+        TokenType.OpenTag
     ];
 
     const classMemberDeclarationListRecoverSet = [
@@ -1483,7 +1486,6 @@ export namespace Parser {
                 }
             case TokenType.Text:
             case TokenType.OpenTag:
-            case TokenType.OpenTagEcho:
             case TokenType.CloseTag:
                 return inlineText();
             case TokenType.ForEach:
@@ -1497,6 +1499,7 @@ export namespace Parser {
             case TokenType.Goto:
                 return gotoStatement();
             case TokenType.Echo:
+            case TokenType.OpenTagEcho:
                 return echoIntrinsic();
             case TokenType.Unset:
                 return unsetIntrinsic();
@@ -1857,7 +1860,7 @@ export namespace Parser {
     }
 
     function echoIntrinsic() {
-        const keyword = next(); //echo
+        const keyword = next(); //echo or <?=
         const exprList = delimitedList(
             PhraseType.ExpressionList,
             expressionInitial,
