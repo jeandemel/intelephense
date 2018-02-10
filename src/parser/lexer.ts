@@ -103,7 +103,6 @@ export const enum TokenType {
     VariableName,
 
     //Operators and Punctuation
-    ImplicitSemicolon,
     Equals,
     Tilde,
     Colon,
