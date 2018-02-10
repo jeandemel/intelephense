@@ -201,16 +201,6 @@ export interface Phrase {
     phraseType: PhraseType;
 
     /**
-     * range start packe position 
-     */
-    start: number;
-
-    /**
-     * range end packed position
-     */
-    end: number;
-
-    /**
      * Phrase and token child nodes
      */
     children: (Phrase | Token)[];
@@ -232,24 +222,21 @@ export interface ParseError extends Phrase {
 }
 
 export namespace Phrase {
-    export function create(type: PhraseType, start: number, end: number, children: (Phrase | Token)[]) {
-        return <Phrase>{
-            phraseType: type,
-            start: start,
-            end: end,
-            children: children
-        }
+    export function create(type: PhraseType, children: (Phrase | Token)[]) {
+        return <Phrase>{ phraseType: type, children: children }
     }
 
-    export function createParseError(start: number, end: number, children: (Phrase | Token)[], unexpected: Token, expected?: TokenType) {
-        return <ParseError>{
+    export function createParseError(children: (Phrase | Token)[], unexpected: Token, expected?: TokenType) {
+        const err = <ParseError>{
             phraseType: PhraseType.Error,
-            start: start,
-            end: end,
             children: children,
-            unexpected: unexpected,
-            expected: expected
+            unexpected: unexpected
         }
+
+        if(expected) {
+            err.expected = expected;
+        }
+        return err;
     }
 }
 
