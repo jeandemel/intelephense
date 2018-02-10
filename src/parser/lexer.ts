@@ -250,32 +250,6 @@ export namespace Lexer {
         return state.lineOffsets;
     }
 
-    /**
-     * It is assumed this will be called with a token that has just been lexed
-     * For this reason the implementation works backwards from he last offset
-     * @param t 
-     */
-    export function tokenPackedRange(t:Token) : [number, number] {
-
-        let endPos = t.offset + t.length;
-        let start:number;
-        let end:number;
-        let offset:number;
-
-        for(let n = state.lineOffsets.length - 1; n > -1 && (start === undefined || end === undefined); --n) {
-            offset = state.lineOffsets[n];
-            if(offset < endPos && end === undefined) {
-                end = PackedPosition.pack(n, endPos - offset);
-            }
-
-            if(offset <= t.offset && start === undefined) {
-                start = PackedPosition.pack(n, t.offset - offset);
-            }
-        }
-
-        return [start, end];
-    }
-
     export function lex(): Token {
         if (state.position >= state.input.length) {
             return {
