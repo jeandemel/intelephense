@@ -1,6 +1,6 @@
 # Change Log
 
-## [0.8.7] - 2018-02-13
+## [0.8.8] - 2018-02-13
 #### Fixed
 * Signature help showing when outside parentheses
 * Formatting error with dynamic vars
