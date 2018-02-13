@@ -303,6 +303,12 @@ class FormatVisitor implements TreeVisitor<Phrase | Token> {
                 }
                 break;
 
+            case TokenType.VariableName:
+                if(previousNonWsToken.tokenType === TokenType.Dollar) {
+                    rule = FormatVisitor.noSpaceBefore;
+                }
+                break;
+
             case TokenType.Semicolon:
             case TokenType.Comma:
             case TokenType.Text:

@@ -132,6 +132,12 @@ $a!==$b;
 
 `;
 
+let noSpaceDynamicVarsSrc = 
+`<?php
+$ $var;
+
+`
+
 describe('provideDocumentFormattingEdits', ()=>{
 
 
@@ -395,6 +401,28 @@ describe('provideDocumentFormattingEdits', ()=>{
                     }
                 },
                 "newText": " "
+            }
+        ];
+        //console.log(JSON.stringify(edits, null, 4));
+        assert.deepEqual(edits, expected);
+    });
+
+    it('nospace dynamic vars', ()=>{
+        let provider = setup(noSpaceDynamicVarsSrc);
+        let edits = provider.provideDocumentFormattingEdits({uri: 'test'}, {tabSize:4, insertSpaces:true});
+        let expected = [
+            {
+                "range": {
+                    "start": {
+                        "line": 1,
+                        "character": 1
+                    },
+                    "end": {
+                        "line": 1,
+                        "character": 2
+                    }
+                },
+                "newText": ""
             }
         ];
         //console.log(JSON.stringify(edits, null, 4));
