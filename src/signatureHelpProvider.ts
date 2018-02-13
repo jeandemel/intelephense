@@ -26,7 +26,7 @@ export class SignatureHelpProvider {
         const table = this.symbolStore.getSymbolTable(uri);
         const refTable = this.refStore.getReferenceTable(uri);
         if (!doc || !table || !refTable) {
-            return null;
+            return undefined;
         }
 
         const traverser = new ParseTreeTraverser(doc, table, refTable);
@@ -37,15 +37,12 @@ export class SignatureHelpProvider {
         if (
             !token ||
             !prevToken ||
-            token.tokenType === TokenType.CloseParenthesis ||
+            (!argExpList && token.tokenType === TokenType.CloseParenthesis) ||
             (!argExpList && token.tokenType !== TokenType.OpenParenthesis && prevToken.tokenType !== TokenType.OpenParenthesis) ||
             !callableExpr
         ) {
-            return null;
+            return undefined;
         }
-
-        console.log(JSON.stringify(argExpList, null, 4));
-        console.log(JSON.stringify(callableExpr, null, 4));
 
         let symbol = this._getSymbol(traverser.clone());
         let delimFilterFn = (x: Phrase | Token) => {
@@ -53,7 +50,7 @@ export class SignatureHelpProvider {
         };
         let argNumber = ParsedDocument.filterChildren(argExpList, delimFilterFn).length;
 
-        return symbol ? this._createSignatureHelp(symbol, argNumber) : null;
+        return symbol ? this._createSignatureHelp(symbol, argNumber) : undefined;
 
     }
 
