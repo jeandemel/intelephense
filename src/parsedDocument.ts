@@ -15,12 +15,6 @@ import * as util from './util';
 
 const textDocumentChangeDebounceWait = 250;
 
-export interface NodeTransform {
-    phraseType?: PhraseType;
-    tokenType?: TokenType;
-    push(transform: NodeTransform);
-}
-
 export interface ParsedDocumentChangeEventArgs {
     parsedDocument: ParsedDocument;
 }
