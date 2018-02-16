@@ -24,7 +24,7 @@ export class ReferenceProvider {
 
         let locations: Location[] = [];
         let doc = this.documentStore.find(uri);
-        let table = this.refStore.getReferenceTable(uri);
+        let table = this.refStore.getInMemoryTable(uri);
 
         if (!doc || !table) {
             return Promise.resolve(locations);
@@ -45,9 +45,12 @@ export class ReferenceProvider {
             return Promise.resolve(locations);
         }
 
+        let store = this.symbolStore;
+
         return this.provideReferences(symbols, table, referenceContext.includeDeclaration).then((refs) => {
             return refs.map((v) => {
-                return v.location;
+                let table = store.getSymbolTableById(v.location.uriHash);
+                return Location.create(table.uri, v.location.range);
             })
         });
 

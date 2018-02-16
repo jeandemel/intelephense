@@ -12,6 +12,7 @@ import {
     Predicate, Traversable, HashedLocation
 } from './types';
 import * as util from './util';
+import * as uriMap from './uriMap';
 
 const textDocumentChangeDebounceWait = 250;
 
@@ -23,7 +24,6 @@ export class ParsedDocument implements Traversable<Phrase | Token>{
 
     private static _wordRegex = /[$a-zA-Z_\x80-\xff][\\a-zA-Z0-9_\x80-\xff]*$/;
     private _textDocument: TextDocument;
-    private _uriHash = 0;
     private _parseTree: Phrase;
     private _changeEvent: Event<ParsedDocumentChangeEventArgs>;
     private _debounce: Debounce<null>;
@@ -37,7 +37,6 @@ export class ParsedDocument implements Traversable<Phrase | Token>{
         this._textDocument = new TextDocument(uri, text);
         this._debounce = new Debounce<null>(this._reparse, textDocumentChangeDebounceWait);
         this._changeEvent = new Event<ParsedDocumentChangeEventArgs>();
-        this._uriHash = Math.abs(util.hash32(uri));
     }
 
     get tree() {
@@ -126,7 +125,7 @@ export class ParsedDocument implements Traversable<Phrase | Token>{
             return null;
         }
 
-        return HashedLocation.create(this._uriHash, range);
+        return HashedLocation.create(uriMap.id(this.uri), range);
     }
 
     nodeLocation(node: Phrase | Token) {

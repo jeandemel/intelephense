@@ -137,7 +137,7 @@ export class CompletionProvider {
 
         let doc = this.documentStore.find(uri);
         let table = this.symbolStore.getSymbolTable(uri);
-        let refTable = this.refStore.getReferenceTable(uri);
+        let refTable = this.refStore.getInMemoryTable(uri);
 
         if (!doc || !table || !refTable) {
             return noCompletionResponse;
