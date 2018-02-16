@@ -61,6 +61,12 @@ let helpWithTypeHintSrc =
     fn()
 `;
 
+let functionHelpWithWhitespaceSrc = 
+`<?php
+    function fn($p1, $p2){}
+    fn( )
+`;
+
 function setup(src: string) {
 
     let docStore = new ParsedDocumentStore();
@@ -246,6 +252,40 @@ describe('SignatureHelpProvider', function () {
 
         });
        
+        it('Function help, no arg list with whitespace', function () {
+
+            let provider = setup(functionHelpWithWhitespaceSrc);
+            let help = provider.provideSignatureHelp('test', {line: 2, character:8});
+            let expected:lsp.SignatureHelp = {
+                activeParameter:0,
+                activeSignature:0,
+                signatures:[
+                    {
+                        label:'fn($p1, $p2)',
+                        parameters:[
+                            {
+                                label:'$p1',
+                            },
+                            {
+                                label:'$p2',
+                            }
+                        ]
+                    }
+                ]
+            };
+            assert.deepEqual(help, expected);
+            //console.log(JSON.stringify(help, null, 4)); 
+
+        });
+
+        it('Function help inside name no result', function () {
+
+            let provider = setup(functionHelpWithWhitespaceSrc);
+            let help = provider.provideSignatureHelp('test', {line: 2, character:6});
+            assert.isNotOk(help);
+            //console.log(JSON.stringify(help, null, 4)); 
+
+        });
 
     });
 

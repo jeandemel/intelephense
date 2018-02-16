@@ -89,7 +89,7 @@ export class ParseTreeTraverser extends TreeTraverser<Phrase | Token> {
         return traverser;
     }
 
-    prevToken() {
+    prevToken(skipTrivia?:boolean) {
 
         const spine = this._spine.slice(0);
         let current:Phrase|Token;
@@ -104,7 +104,7 @@ export class ParseTreeTraverser extends TreeTraverser<Phrase | Token> {
 
             if(prevSiblingIndex > -1) {
                 spine.push(parent.children[prevSiblingIndex]);
-                if(this._lastToken(spine)) {
+                if(this._lastToken(spine, skipTrivia)) {
                     //token found
                     this._spine = spine;
                     return this.node;
@@ -119,10 +119,10 @@ export class ParseTreeTraverser extends TreeTraverser<Phrase | Token> {
 
     }
 
-    private _lastToken(spine:(Phrase|Token)[]) {
+    private _lastToken(spine:(Phrase|Token)[], skipTrivia?:boolean) {
 
         let node = spine[spine.length - 1];
-        if((<Token>node).tokenType !== undefined) {
+        if((<Token>node).tokenType !== undefined && (!skipTrivia || (<Token>node).tokenType < TokenType.Comment)) {
             return spine;
         }
 
