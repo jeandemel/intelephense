@@ -762,3 +762,25 @@ export class SortedList<T> {
     }
 
 }
+
+export namespace PackedPosition {
+
+    /**
+     * Packs line and character into a 31 bit int
+     * 20 bits for line
+     * 11 bits for character
+     * @param line 
+     * @param character 
+     */
+    export function pack(line:number, character:number) {
+        return ((line & 0xfffff) << 11) | (character & 0x7ff); 
+    }
+
+    export function line(packedPosition:number) {
+        return packedPosition >>> 11;
+    }
+
+    export function character(packedPosition:number) {
+        return packedPosition & 0x7ff;
+    }
+}
