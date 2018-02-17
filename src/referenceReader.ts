@@ -12,7 +12,7 @@ import { SymbolKind, PhpSymbol, SymbolModifier } from './symbol';
 import { SymbolStore, SymbolTable } from './symbolStore';
 import { ParsedDocument, NodeTransform } from './parsedDocument';
 import { NameResolver } from './nameResolver';
-import { Predicate, BinarySearch, BinarySearchResult, HashedLocation } from './types';
+import { Predicate, BinarySearch, BinarySearchResult, PackedLocation } from './types';
 import * as lsp from 'vscode-languageserver-types';
 import { isInRange } from './util';
 import { TypeString } from './typeString';
@@ -1230,9 +1230,9 @@ class RelativeScopeTransform implements TypeNodeTransform, ReferenceNodeTransfor
 
     phraseType = PhraseType.RelativeScope;
     reference:Reference;
-    constructor(public type: string, loc:HashedLocation) {
+    constructor(public type: string, loc:PackedLocation) {
         this.reference = Reference.create(SymbolKind.Class, type, loc);
-        this.reference.altName = 'static';
+        this.reference.unresolvedName = 'static';
      }
     push(transform: NodeTransform) { }
 }
@@ -1288,7 +1288,7 @@ class SimpleVariableTransform implements TypeNodeTransform, ReferenceNodeTransfo
     reference: Reference;
     private _varTable: VariableTable;
 
-    constructor(loc: HashedLocation, varTable: VariableTable) {
+    constructor(loc: PackedLocation, varTable: VariableTable) {
         this._varTable = varTable;
         this.reference = Reference.create(SymbolKind.Variable, '', loc);
     }
@@ -1311,7 +1311,7 @@ class FullyQualifiedNameTransform implements TypeNodeTransform, ReferenceNodeTra
     phraseType = PhraseType.FullyQualifiedName;
     reference: Reference;
 
-    constructor(symbolKind: SymbolKind, loc: HashedLocation) {
+    constructor(symbolKind: SymbolKind, loc: PackedLocation) {
         this.reference = Reference.create(symbolKind, '', loc);
     }
 
@@ -1335,7 +1335,7 @@ class QualifiedNameTransform implements TypeNodeTransform, ReferenceNodeTransfor
     reference: Reference;
     private _nameResolver: NameResolver;
 
-    constructor(symbolKind: SymbolKind, loc: HashedLocation, nameResolver: NameResolver) {
+    constructor(symbolKind: SymbolKind, loc: PackedLocation, nameResolver: NameResolver) {
         this.reference = Reference.create(symbolKind, '', loc);
         this._nameResolver = nameResolver;
     }
@@ -1350,7 +1350,7 @@ class QualifiedNameTransform implements TypeNodeTransform, ReferenceNodeTransfor
                 ((this.reference.kind === SymbolKind.Function || this.reference.kind === SymbolKind.Constant) &&
                 name !== this.reference.name && name.indexOf('\\') < 0) || (lcName === 'parent' || lcName === 'self')
             ) {
-                this.reference.altName = name;
+                this.reference.unresolvedName = name;
             }
         }
 
@@ -1368,7 +1368,7 @@ class RelativeQualifiedNameTransform implements TypeNodeTransform, ReferenceNode
     reference: Reference;
     private _nameResolver: NameResolver;
 
-    constructor(symbolKind: SymbolKind, loc: HashedLocation, nameResolver: NameResolver) {
+    constructor(symbolKind: SymbolKind, loc: PackedLocation, nameResolver: NameResolver) {
         this.reference = Reference.create(symbolKind, '', loc);
         this._nameResolver = nameResolver;
     }
@@ -1392,7 +1392,7 @@ class MemberNameTransform implements ReferenceNodeTransform {
     phraseType = PhraseType.MemberName;
     reference: Reference;
 
-    constructor(loc: HashedLocation) {
+    constructor(loc: PackedLocation) {
         this.reference = Reference.create(SymbolKind.None, '', loc);
     }
 
@@ -1409,7 +1409,7 @@ class ScopedMemberNameTransform implements ReferenceNodeTransform {
     phraseType = PhraseType.ScopedMemberName;
     reference: Reference;
 
-    constructor(loc: HashedLocation) {
+    constructor(loc: PackedLocation) {
         this.reference = Reference.create(SymbolKind.None, '', loc);
     }
 
@@ -1427,7 +1427,7 @@ class ScopedMemberNameTransform implements ReferenceNodeTransform {
 class IdentifierTransform implements TextNodeTransform {
     phraseType = PhraseType.Identifier;
     text = '';
-    location: HashedLocation;
+    location: PackedLocation;
 
     push(transform: NodeTransform) {
         this.text = (<TokenTransform>transform).text;

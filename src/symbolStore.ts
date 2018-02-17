@@ -7,7 +7,7 @@
 import { PhpSymbol, SymbolKind, SymbolModifier, SymbolIdentifier } from './symbol';
 import { Reference } from './reference';
 import {
-    TreeTraverser, Predicate, TreeVisitor, Traversable, BinarySearch, NameIndex, HashedLocation, FindByStartPositionTraverser,
+    TreeTraverser, Predicate, TreeVisitor, Traversable, BinarySearch, NameIndex, PackedLocation, FindByStartPositionTraverser,
     NameIndexNode
 } from './types';
 import { Position, Location, Range } from 'vscode-languageserver-types';
@@ -374,8 +374,8 @@ export class SymbolStore {
                     return x.kind === ref.kind;
                 };
                 symbols = this.find(ref.name, fn);
-                if (symbols.length < 1 && ref.altName) {
-                    symbols = this.find(ref.altName, fn);
+                if (symbols.length < 1 && ref.unresolvedName) {
+                    symbols = this.find(ref.unresolvedName, fn);
                 }
                 break;
 

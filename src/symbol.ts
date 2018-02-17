@@ -7,7 +7,7 @@
 import { TypeString } from './typeString';
 import { BinarySearch } from './types';
 import { Location, Range } from 'vscode-languageserver-types';
-import { Predicate, HashedLocation } from './types';
+import { Predicate, PackedLocation } from './types';
 import * as util from './util';
 
 export const enum SymbolKind {
@@ -70,7 +70,7 @@ export interface PhpSymbol extends SymbolIdentifier {
 export interface SymbolIdentifier {
     kind: SymbolKind;
     name: string;
-    location:HashedLocation;
+    location:PackedLocation;
     scope?: string;
 }
 
@@ -236,7 +236,7 @@ export namespace PhpSymbol {
         return symbols;
     }
 
-    export function create(kind: SymbolKind, name: string, location?: HashedLocation): PhpSymbol {
+    export function create(kind: SymbolKind, name: string, location?: PackedLocation): PhpSymbol {
         return {
             kind: kind,
             name: name,

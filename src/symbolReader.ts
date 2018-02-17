@@ -4,7 +4,7 @@
 
 'use strict';
 
-import { TreeVisitor, MultiVisitor, HashedLocation } from './types';
+import { TreeVisitor, MultiVisitor, PackedLocation } from './types';
 import { ParsedDocument, NodeTransform } from './parsedDocument';
 import { Phrase, PhraseType, Token, TokenType } from 'php7parser';
 import { PhpDoc, PhpDocParser, Tag, MethodTagParam } from './phpDoc';
@@ -16,7 +16,7 @@ import * as util from './util';
 export class SymbolReader implements TreeVisitor<Phrase | Token> {
 
     lastPhpDoc: PhpDoc;
-    lastPhpDocLocation: HashedLocation;
+    lastPhpDocLocation: PackedLocation;
 
     private _transformStack: NodeTransform[];
     private _uriHash = 0;
@@ -498,7 +498,7 @@ class FileTransform implements SymbolNodeTransform {
     private _children: UniqueSymbolCollection;
     private _symbol: PhpSymbol;
 
-    constructor(uri: string, location: HashedLocation) {
+    constructor(uri: string, location: PackedLocation) {
         this._symbol = PhpSymbol.create(SymbolKind.File, uri, location);
         this._children = new UniqueSymbolCollection();
     }
@@ -627,7 +627,7 @@ class FullyQualifiedNameTransform implements NameNodeTransform {
 class CatchClauseVariableNameTransform implements SymbolNodeTransform {
     tokenType = TokenType.VariableName;
     symbol: PhpSymbol;
-    constructor(name: string, location: HashedLocation) {
+    constructor(name: string, location: PackedLocation) {
         this.symbol = PhpSymbol.create(SymbolKind.Variable, name, location);
     }
     push(transform: NodeTransform) { }
@@ -639,9 +639,9 @@ class ParameterDeclarationTransform implements SymbolNodeTransform {
     symbol: PhpSymbol;
     private _doc: PhpDoc;
     private _nameResolver: NameResolver;
-    private _docLocation: HashedLocation;
+    private _docLocation: PackedLocation;
 
-    constructor(location: HashedLocation, doc: PhpDoc, docLocation: HashedLocation, nameResolver: NameResolver) {
+    constructor(location: PackedLocation, doc: PhpDoc, docLocation: PackedLocation, nameResolver: NameResolver) {
         this.symbol = PhpSymbol.create(SymbolKind.Parameter, '', location);
         this._doc = doc;
         this._docLocation = docLocation;
@@ -669,7 +669,7 @@ class DefineFunctionCallExpressionTransform implements SymbolNodeTransform {
 
     phraseType = PhraseType.FunctionCallExpression;
     symbol: PhpSymbol;
-    constructor(location: HashedLocation) {
+    constructor(location: PackedLocation) {
         this.symbol = PhpSymbol.create(SymbolKind.Constant, '', location);
     }
 
@@ -702,7 +702,7 @@ class SimpleVariableTransform implements SymbolNodeTransform {
 
     phraseType = PhraseType.SimpleVariable;
     symbol: PhpSymbol;
-    constructor(location: HashedLocation) {
+    constructor(location: PackedLocation) {
         this.symbol = PhpSymbol.create(SymbolKind.Variable, '', location);
     }
 
@@ -719,7 +719,7 @@ class AnonymousClassDeclarationTransform implements SymbolNodeTransform {
     phraseType = PhraseType.AnonymousClassDeclaration;
     symbol: PhpSymbol;
 
-    constructor(location: HashedLocation, name: string) {
+    constructor(location: PackedLocation, name: string) {
         this.symbol = PhpSymbol.create(SymbolKind.Class, name, location);
         this.symbol.modifiers = SymbolModifier.Anonymous;
         this.symbol.children = [];
@@ -802,7 +802,7 @@ class AnonymousFunctionCreationExpressionTransform implements SymbolNodeTransfor
     private _symbol: PhpSymbol;
     private _children: UniqueSymbolCollection;
 
-    constructor(location: HashedLocation, name: string) {
+    constructor(location: PackedLocation, name: string) {
         this._symbol = PhpSymbol.create(SymbolKind.Function, name, location);
         this._symbol.modifiers = SymbolModifier.Anonymous;
         this._children = new UniqueSymbolCollection();
@@ -923,7 +923,7 @@ class AnonymousFunctionUseVariableTransform implements SymbolNodeTransform {
     phraseType = PhraseType.AnonymousFunctionUseVariable;
     symbol: PhpSymbol;
 
-    constructor(location: HashedLocation) {
+    constructor(location: PackedLocation) {
         this.symbol = PhpSymbol.create(SymbolKind.Variable, '', location);
         this.symbol.modifiers = SymbolModifier.Use;
     }
@@ -943,7 +943,7 @@ class InterfaceDeclarationTransform implements SymbolNodeTransform {
     phraseType = PhraseType.InterfaceDeclaration;
     symbol: PhpSymbol;
 
-    constructor(public nameResolver: NameResolver, location: HashedLocation, doc: PhpDoc, docLocation: HashedLocation) {
+    constructor(public nameResolver: NameResolver, location: PackedLocation, doc: PhpDoc, docLocation: PackedLocation) {
         this.symbol = PhpSymbol.create(SymbolKind.Interface, '', location);
         SymbolReader.assignPhpDocInfoToSymbol(this.symbol, doc, docLocation, nameResolver);
         this.symbol.children = [];
@@ -966,9 +966,9 @@ class ConstElementTransform implements SymbolNodeTransform {
     phraseType = PhraseType.ConstElement;
     symbol: PhpSymbol;
     private _doc: PhpDoc;
-    private _docLocation: HashedLocation;
+    private _docLocation: PackedLocation;
 
-    constructor(public nameResolver: NameResolver, location: HashedLocation, doc: PhpDoc, docLocation: HashedLocation) {
+    constructor(public nameResolver: NameResolver, location: PackedLocation, doc: PhpDoc, docLocation: PackedLocation) {
         this.symbol = PhpSymbol.create(SymbolKind.Constant, '', location);
         this.symbol.scope = this.nameResolver.namespaceName;
         this._doc = doc;
@@ -994,7 +994,7 @@ class TraitDeclarationTransform implements SymbolNodeTransform {
     phraseType = PhraseType.TraitDeclaration;
     symbol: PhpSymbol;
 
-    constructor(public nameResolver: NameResolver, location: HashedLocation, doc: PhpDoc, docLocation: HashedLocation) {
+    constructor(public nameResolver: NameResolver, location: PackedLocation, doc: PhpDoc, docLocation: PackedLocation) {
         this.symbol = PhpSymbol.create(SymbolKind.Trait, '', location);
         SymbolReader.assignPhpDocInfoToSymbol(this.symbol, doc, docLocation, nameResolver);
         this.symbol.children = [];
@@ -1106,7 +1106,7 @@ class NamespaceDefinitionTransform implements SymbolNodeTransform {
     private _symbol: PhpSymbol;
     private _children: UniqueSymbolCollection;
 
-    constructor(location: HashedLocation) {
+    constructor(location: PackedLocation) {
         this._symbol = PhpSymbol.create(SymbolKind.Namespace, '', location);
         this._children = new UniqueSymbolCollection();
     }
@@ -1142,7 +1142,7 @@ class ClassDeclarationTransform implements SymbolNodeTransform {
     phraseType = PhraseType.ClassDeclaration;
     symbol: PhpSymbol;
 
-    constructor(public nameResolver: NameResolver, location: HashedLocation, doc: PhpDoc, docLocation: HashedLocation) {
+    constructor(public nameResolver: NameResolver, location: PackedLocation, doc: PhpDoc, docLocation: PackedLocation) {
         this.symbol = PhpSymbol.create(SymbolKind.Class, '', location);
         this.symbol.children = [];
         this.symbol.associated = [];
@@ -1257,10 +1257,10 @@ class ClassConstantElementTransform implements SymbolNodeTransform {
 
     phraseType = PhraseType.ClassConstElement;
     symbol: PhpSymbol;
-    private _docLocation: HashedLocation;
+    private _docLocation: PackedLocation;
     private _doc: PhpDoc;
 
-    constructor(public nameResolver: NameResolver, location: HashedLocation, doc: PhpDoc, docLocation: HashedLocation) {
+    constructor(public nameResolver: NameResolver, location: PackedLocation, doc: PhpDoc, docLocation: PackedLocation) {
         this.symbol = PhpSymbol.create(SymbolKind.ClassConstant, '', location);
         this.symbol.modifiers = SymbolModifier.Static;
         this._doc = doc;
@@ -1284,7 +1284,7 @@ class MethodDeclarationTransform implements SymbolNodeTransform {
     private _children: UniqueSymbolCollection;
     private _symbol: PhpSymbol;
 
-    constructor(public nameResolver: NameResolver, location: HashedLocation, doc: PhpDoc, docLocation: HashedLocation) {
+    constructor(public nameResolver: NameResolver, location: PackedLocation, doc: PhpDoc, docLocation: PackedLocation) {
         this._symbol = PhpSymbol.create(SymbolKind.Method, '', location);
         SymbolReader.assignPhpDocInfoToSymbol(this._symbol, doc, docLocation, nameResolver);
         this._children = new UniqueSymbolCollection();
@@ -1427,9 +1427,9 @@ class PropertyElementTransform implements SymbolNodeTransform {
     phraseType = PhraseType.PropertyElement;
     symbol: PhpSymbol;
     private _doc: PhpDoc;
-    private _docLocation: HashedLocation;
+    private _docLocation: PackedLocation;
 
-    constructor(public nameResolver: NameResolver, location: HashedLocation, doc: PhpDoc, docLocation: HashedLocation) {
+    constructor(public nameResolver: NameResolver, location: PackedLocation, doc: PhpDoc, docLocation: PackedLocation) {
         this.symbol = PhpSymbol.create(SymbolKind.Property, '', location);
         this._doc = doc;
         this._docLocation = docLocation;
@@ -1484,7 +1484,7 @@ class FunctionDeclarationTransform implements SymbolNodeTransform {
     private _symbol: PhpSymbol;
     private _children: UniqueSymbolCollection;
 
-    constructor(public nameResolver: NameResolver, location: HashedLocation, phpDoc: PhpDoc, phpDocLocation: HashedLocation) {
+    constructor(public nameResolver: NameResolver, location: PackedLocation, phpDoc: PhpDoc, phpDocLocation: PackedLocation) {
         this._symbol = PhpSymbol.create(SymbolKind.Function, '', location);
         SymbolReader.assignPhpDocInfoToSymbol(this._symbol, phpDoc, phpDocLocation, nameResolver);
         this._children = new UniqueSymbolCollection();
@@ -1542,7 +1542,7 @@ class DefaultNodeTransform implements TextNodeTransform {
 
 export namespace SymbolReader {
 
-    export function assignPhpDocInfoToSymbol(s: PhpSymbol, doc: PhpDoc, docLocation: HashedLocation, nameResolver: NameResolver) {
+    export function assignPhpDocInfoToSymbol(s: PhpSymbol, doc: PhpDoc, docLocation: PackedLocation, nameResolver: NameResolver) {
 
         if (!doc) {
             return s;
@@ -1593,7 +1593,7 @@ export namespace SymbolReader {
 
     }
 
-    export function phpDocMembers(phpDoc: PhpDoc, phpDocLoc: HashedLocation, nameResolver: NameResolver) {
+    export function phpDocMembers(phpDoc: PhpDoc, phpDocLoc: PackedLocation, nameResolver: NameResolver) {
 
         let magic: Tag[] = phpDoc.propertyTags;
         let symbols: PhpSymbol[] = [];
@@ -1610,7 +1610,7 @@ export namespace SymbolReader {
         return symbols;
     }
 
-    function methodTagToSymbol(tag: Tag, phpDocLoc: HashedLocation, nameResolver: NameResolver) {
+    function methodTagToSymbol(tag: Tag, phpDocLoc: PackedLocation, nameResolver: NameResolver) {
 
         let s = PhpSymbol.create(SymbolKind.Method, tag.name, phpDocLoc);
         s.modifiers = SymbolModifier.Magic | SymbolModifier.Public;
@@ -1632,7 +1632,7 @@ export namespace SymbolReader {
         return s;
     }
 
-    function magicMethodParameterToSymbol(p: MethodTagParam, phpDocLoc: HashedLocation, nameResolver: NameResolver) {
+    function magicMethodParameterToSymbol(p: MethodTagParam, phpDocLoc: PackedLocation, nameResolver: NameResolver) {
 
         let s = PhpSymbol.create(SymbolKind.Parameter, p.name, phpDocLoc);
         s.modifiers = SymbolModifier.Magic;
@@ -1641,7 +1641,7 @@ export namespace SymbolReader {
 
     }
 
-    function propertyTagToSymbol(t: Tag, phpDocLoc: HashedLocation, nameResolver: NameResolver) {
+    function propertyTagToSymbol(t: Tag, phpDocLoc: PackedLocation, nameResolver: NameResolver) {
         let s = PhpSymbol.create(SymbolKind.Property, t.name, phpDocLoc);
         s.modifiers = magicPropertyModifier(t) | SymbolModifier.Magic | SymbolModifier.Public;
         s.doc = PhpSymbolDoc.create(t.description, TypeString.nameResolve(t.typeString, nameResolver));
@@ -1761,7 +1761,7 @@ class NamespaceUseClauseTransform implements NodeTransform {
 
     symbol: PhpSymbol;
 
-    constructor(public phraseType: PhraseType, location: HashedLocation) {
+    constructor(public phraseType: PhraseType, location: PackedLocation) {
         this.symbol = PhpSymbol.create(0, '', location);
         this.symbol.modifiers = SymbolModifier.Use;
         this.symbol.associated = [];
@@ -1788,7 +1788,7 @@ class NamespaceAliasingClause implements TextNodeTransform {
 
     phraseType = PhraseType.NamespaceAliasingClause;
     text = '';
-    location: HashedLocation;
+    location: PackedLocation;
 
     push(transform: NodeTransform) {
         if (transform.tokenType === TokenType.Name) {

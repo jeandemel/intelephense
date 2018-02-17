@@ -9,7 +9,7 @@ import { TextDocument } from './textDocument';
 import * as lsp from 'vscode-languageserver-types';
 import {
     TreeVisitor, TreeTraverser, Event, Debounce, Unsubscribe,
-    Predicate, Traversable, HashedLocation
+    Predicate, Traversable, PackedLocation
 } from './types';
 import * as util from './util';
 import * as uriMap from './uriMap';

@@ -50,14 +50,14 @@ export class Event<T> {
 
 }
 
-export interface HashedLocation {
+export interface PackedLocation {
     uriHash: number;
-    range: Range;
+    range: PackedRange;
 }
 
 export namespace HashedLocation {
-    export function create(uriHash: number, range: Range) {
-        return <HashedLocation>{
+    export function create(uriHash: number, range: PackedRange) {
+        return <PackedLocation>{
             uriHash: uriHash,
             range: range
         };
@@ -786,6 +786,12 @@ export namespace PackedPosition {
         return packedPosition & 0x7ff;
     }
 }
+
+export type PackedRange = {
+    start: number, 
+    end: number
+};
+
 export interface Locatable extends TreeLike {
     location: {range:Range};
 }
@@ -834,4 +840,5 @@ export class FindByStartPositionTraverser<T extends Locatable> {
     }
 
 }
+
 

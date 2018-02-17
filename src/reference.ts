@@ -4,7 +4,7 @@
 
 'use strict';
 
-import { Predicate, TreeVisitor, TreeTraverser, NameIndex, Traversable, SortedList, NameIndexNode, HashedLocation } from './types';
+import { Predicate, TreeVisitor, TreeTraverser, NameIndex, Traversable, SortedList, NameIndexNode, PackedLocation, PackedRange } from './types';
 import { SymbolIdentifier, SymbolKind } from './symbol';
 import { Range, Location, Position } from 'vscode-languageserver-types';
 import * as util from './util';
@@ -12,28 +12,28 @@ import { FileCache, Cache } from './cache';
 import { Log } from './logger';
 import * as uriMap from './uriMap';
 
-export interface Reference extends SymbolIdentifier {
+export interface Reference {
+    kind:SymbolKind;
+    name:string;
+    range:PackedRange;
+    scope?:string;
     type?: string;
-    altName?: string;
+    unresolvedName?: string;
 }
 
 export namespace Reference {
-    export function create(kind: SymbolKind, name: string, location: HashedLocation): Reference {
-        return {
-            kind: kind,
-            name: name,
-            location: location
-        };
+    export function create(kind: SymbolKind, name: string, range:PackedRange): Reference {
+        return { kind: kind, name: name, range: range };
     }
 }
 
 export interface Scope {
-    location: HashedLocation;
+    location: PackedLocation;
     children: (Scope | Reference)[]
 }
 
 export namespace Scope {
-    export function create(location: HashedLocation): Scope {
+    export function create(location: PackedLocation): Scope {
         return {
             location: location,
             children: []
@@ -365,7 +365,7 @@ class IndexableReferenceIdentifiersVisitor implements TreeVisitor<Scope | Refere
     preorder(node: Scope | Reference, spine: (Scope | Reference)[]) {
         if (this._shouldIndex(node)) {
             let lcName = (<Reference>node).name.toLowerCase();
-            let altName = (<Reference>node).altName;
+            let altName = (<Reference>node).unresolvedName;
             if (lcName && lcName !== 'true' && lcName !== 'false' && lcName !== 'null') {
                 this._identifiers.add(lcName);
             }
