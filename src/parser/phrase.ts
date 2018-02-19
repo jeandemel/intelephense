@@ -191,7 +191,8 @@ export const enum PhraseType {
     VariadicUnpacking,
     WhileStatement,
     YieldExpression,
-    YieldFromExpression
+    YieldFromExpression,
+    TopStatementList
 }
 
 export interface Phrase {

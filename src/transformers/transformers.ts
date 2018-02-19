@@ -4,7 +4,8 @@
 
 'use strict';
 
-import {Phrase, PhraseType, Token, TokenType} from 'php7parser';
+import {Phrase, PhraseType} from '../parser/phrase';
+import{Token, TokenType} from '../parser/lexer';
 import {PackedRange} from '../types';
 import {Reference} from '../reference';
 import * as lsp from 'vscode-languageserver-types';
@@ -12,6 +13,7 @@ import * as lsp from 'vscode-languageserver-types';
 export interface NodeTransformer {
     tokenType?:TokenType;
     phraseType?:PhraseType;
+    node:Phrase|Token;
     push(transform: NodeTransformer);
 }
 

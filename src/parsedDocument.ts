@@ -4,12 +4,14 @@
 
 'use strict';
 
-import { Phrase, Token, TokenType, PhraseType, Parser } from 'php7parser';
+import { Phrase, PhraseType,} from './parser/phrase';
+import {TokenType, Token} from './parser/lexer';
+import {Parser} from './parser/parser';
 import { TextDocument } from './textDocument';
 import * as lsp from 'vscode-languageserver-types';
 import {
     TreeVisitor, TreeTraverser, Event, Debounce, Unsubscribe,
-    Predicate, Traversable, PackedLocation
+    Predicate, Traversable, PackedLocation, PackedRange, PackedPosition
 } from './types';
 import * as util from './util';
 import * as uriMap from './uriMap';
@@ -18,6 +20,12 @@ const textDocumentChangeDebounceWait = 250;
 
 export interface ParsedDocumentChangeEventArgs {
     parsedDocument: ParsedDocument;
+}
+
+export interface NodeUtils {
+    nodePackedLocation(node:Phrase|Token):PackedLocation;
+    nodePackedRange(node:Phrase|Token):PackedRange;
+    nodeText(node:Phrase|Token):string;
 }
 
 export class ParsedDocument implements Traversable<Phrase | Token>{
@@ -84,6 +92,24 @@ export class ParsedDocument implements Traversable<Phrase | Token>{
         return visitor;
     }
 
+    nodeUtils():NodeUtils {
+        const that = this;
+        return {
+            nodePackedLocation: (n) => {
+                return {
+                    uriHash:uriMap.id(that.uri),
+                    range: that.nodePackedRange(n)
+                };
+            },
+            nodePackedRange: (n) => {
+                return that.nodePackedRange(n);
+            },
+            nodeText: (n) => {
+                return that.nodeText(n);
+            }
+        }
+    }
+
     applyChanges(contentChanges: lsp.TextDocumentContentChangeEvent[]) {
 
         let change: lsp.TextDocumentContentChangeEvent;
@@ -142,6 +168,14 @@ export class ParsedDocument implements Traversable<Phrase | Token>{
 
         return lsp.Location.create(this.uri, range);
 
+    }
+
+    nodePackedRange(node:Phrase|Token) {
+        const r = this.nodeRange(node);
+        return <PackedRange>{
+            start: PackedPosition.pack(r.start.line, r.start.character),
+            end: PackedPosition.pack(r.end.line, r.end.character)
+        };
     }
 
     nodeRange(node: Phrase | Token) {

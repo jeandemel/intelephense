@@ -9,6 +9,7 @@ import { BinarySearch } from './types';
 import { Location, Range } from 'vscode-languageserver-types';
 import { Predicate, PackedLocation } from './types';
 import * as util from './util';
+import { Reference } from './reference';
 
 export const enum SymbolKind {
     None = 0,
@@ -59,10 +60,12 @@ export namespace PhpSymbolDoc {
 }
 
 export interface PhpSymbol extends SymbolIdentifier {
+    location:PackedLocation;
+    scope?: string;
     modifiers?: SymbolModifier;
     doc?: PhpSymbolDoc;
     type?: string;
-    associated?: PhpSymbol[];
+    associated?: Reference[];
     children?: PhpSymbol[];
     value?: string;
 }
@@ -70,8 +73,6 @@ export interface PhpSymbol extends SymbolIdentifier {
 export interface SymbolIdentifier {
     kind: SymbolKind;
     name: string;
-    location:PackedLocation;
-    scope?: string;
 }
 
 export namespace PhpSymbol {

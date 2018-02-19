@@ -430,7 +430,14 @@ export namespace Parser {
 
     }
 
-    function statementList(breakOn: TokenType[]) {
+    function topStatementList(breakOn: TokenType[]) {
+        //@todo restrict some statements to top stmt list only
+        const stmtList = statementList(breakOn);
+        stmtList.phraseType = PhraseType.TopStatementList;
+        return stmtList;
+    }
+
+    function statementList(breakOn: TokenType[]):Phrase {
         return list(
             PhraseType.StatementList,
             statement,
