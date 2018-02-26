@@ -26,6 +26,7 @@ export interface NodeUtils {
     nodePackedLocation(node:Phrase|Token):PackedLocation;
     nodePackedRange(node:Phrase|Token):PackedRange;
     nodeText(node:Phrase|Token):string;
+    anonymousName(node:Phrase):string;
 }
 
 export class ParsedDocument implements Traversable<Phrase | Token>{
@@ -106,6 +107,9 @@ export class ParsedDocument implements Traversable<Phrase | Token>{
             },
             nodeText: (n) => {
                 return that.nodeText(n);
+            },
+            anonymousName: (n) => {
+                return that.createAnonymousName(n);
             }
         }
     }

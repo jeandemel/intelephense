@@ -263,7 +263,7 @@ export namespace PhpSymbol {
 
     export function isAssociated(symbol: PhpSymbol, name: string) {
         let lcName = name.toLowerCase();
-        let fn = (x: PhpSymbol) => {
+        let fn = (x: Reference) => {
             return lcName === x.name.toLowerCase();
         }
         return util.find(symbol.associated, fn);

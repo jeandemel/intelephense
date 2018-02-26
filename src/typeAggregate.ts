@@ -9,6 +9,7 @@ import { SymbolStore } from './symbolStore';
 import { Predicate } from './types';
 import * as util from './util';
 import {TypeString} from './typeString';
+import { Reference } from './reference';
 
 export const enum MemberMergeStrategy {
     None, //returns all symbols
@@ -37,6 +38,20 @@ export class TypeAggregate {
 
     get name() {
         return Array.isArray(this._symbol) ? this._symbol[0].name : this._symbol.name;
+    }
+
+    baseClassName() {
+        if(Array.isArray(this._symbol)) {
+            let baseName:string;
+            for(let n = 0; n < this._symbol.length; ++n) {
+                if((baseName = this._symbolBaseClassName(this._symbol[n]))) {
+                    return baseName;
+                }
+            }
+            return '';
+        } else {
+            return this._symbolBaseClassName(this._symbol);
+        }
     }
 
     isBaseClass(name:string) {
@@ -180,6 +195,11 @@ export class TypeAggregate {
 
     }
 
+    private _symbolBaseClassName(s:PhpSymbol) {
+        let base = s.associated ? s.associated.find(this._isClass) : undefined;
+        return base ? base.name : '';
+    }
+
     private _interfaceMembers(interfaces: PhpSymbol[], predicate?: Predicate<PhpSymbol>) {
         let members: PhpSymbol[] = [];
         let s: PhpSymbol;
@@ -241,6 +261,10 @@ export class TypeAggregate {
 
         return this._associated = Array.from(this._associatedIterator());
 
+    }
+
+    private _isClass(r:Reference) {
+        return r.kind === SymbolKind.Class;
     }
 
     private _symbolsAssociatedReduce(accum:PhpSymbol[], current:PhpSymbol) {

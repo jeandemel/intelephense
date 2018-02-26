@@ -9,14 +9,17 @@ import{Token, TokenType} from '../parser/lexer';
 import {PackedRange} from '../types';
 import {Reference} from '../reference';
 import * as lsp from 'vscode-languageserver-types';
+import {PhpDoc} from '../phpDoc';
 
 export interface NodeTransformer {
-    tokenType?:TokenType;
-    phraseType?:PhraseType;
     node:Phrase|Token;
     push(transform: NodeTransformer);
 }
 
 export interface ReferencePhrase extends Phrase {
     reference:Reference;
+}
+
+export interface PhpDocPhrase extends Phrase {
+    doc:PhpDoc;
 }

@@ -161,6 +161,14 @@ export namespace TypeString {
         return typeString.replace(classNamePattern, replacer);
     }
 
+    export function isArray(typeString:string) {
+        return chunk(typeString).findIndex(isArrayPredicate) > -1;
+    }
+
+    function isArrayPredicate(t:string) {
+        return t.slice(-2) === '[]' || t.toLowerCase() === 'array';
+    }
+
     function unique(parts: string[]) {
         let set = new Set<string>(parts);
         return Array.from(set);
