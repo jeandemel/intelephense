@@ -34,11 +34,11 @@ export class DefinitionProvider {
             return null;
         }
 
-        let symbols = this.symbolStore.findSymbolsByReference(ref, MemberMergeStrategy.Override);
+        let symbols = this.symbolStore.findSymbolsByReference(ref, MemberMergeStrategy.First);
 
         if(ref.kind === SymbolKind.Constructor && symbols.length < 1) {
             //fallback to class
-            symbols = this.symbolStore.findSymbolsByReference(Reference.create(SymbolKind.Class, ref.name, ref.location), MemberMergeStrategy.Override);
+            symbols = this.symbolStore.findSymbolsByReference(Reference.create(SymbolKind.Class, ref.name, ref.location), MemberMergeStrategy.First);
         }
 
         let locations: Location[] = [];

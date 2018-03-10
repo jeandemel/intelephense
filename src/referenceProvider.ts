@@ -40,7 +40,7 @@ export class ReferenceProvider {
             }
 
             //if class member then make sure base symbol is fetched
-            symbols = this.symbolStore.findSymbolsByReference(ref, MemberMergeStrategy.Base);
+            symbols = this.symbolStore.findSymbolsByReference(ref, MemberMergeStrategy.Last);
         } else {
             return Promise.resolve(locations);
         }
@@ -177,7 +177,7 @@ export class ReferenceProvider {
             if (!aggregateType) {
                 return map[lcScope] = false;
             }
-            return map[lcScope] = aggregateType.associated(associatedFilterFn).length > 0;
+            return map[lcScope] = aggregateType.isAssociated(lcBaseTypeName);
 
         };
 

@@ -34,7 +34,7 @@ export class HoverProvider {
             return undefined;
         }
 
-        let symbol = this.symbolStore.findSymbolsByReference(ref, MemberMergeStrategy.Override).shift();
+        let symbol = this.symbolStore.findSymbolsByReference(ref, MemberMergeStrategy.First).shift();
 
         if (!symbol) {
             return undefined;

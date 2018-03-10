@@ -55,6 +55,7 @@ export const enum PhraseType {
     ContinueStatement,
     DeclareDirective,
     DeclareStatement,
+    DefaultArgumentSpecifier,
     DefaultStatement,
     DocBlock,
     DoStatement,
@@ -340,6 +341,8 @@ export function phraseTypeToString(type: PhraseType) {
             return 'DeclareDirective';
         case PhraseType.DeclareStatement:
             return 'DeclareStatement';
+        case PhraseType.DefaultArgumentSpecifier:
+            return 'DefaultArgumentSpecifier';
         case PhraseType.DefaultStatement:
             return 'DefaultStatement';
         case PhraseType.DoStatement:

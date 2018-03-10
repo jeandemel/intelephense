@@ -474,7 +474,7 @@ export class SymbolStore {
             };
         }
 
-        return this.findMembers(symbol.scope, MemberMergeStrategy.Base, fn).shift() || symbol;
+        return this.findMembers(symbol.scope, MemberMergeStrategy.Last, fn).shift() || symbol;
 
     }
 

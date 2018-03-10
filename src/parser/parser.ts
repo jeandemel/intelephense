@@ -2532,11 +2532,16 @@ export namespace Parser {
         children.push(expect(TokenType.VariableName));
 
         if (peek().tokenType === TokenType.Equals) {
-            children.push(next());
-            children.push(expression(0));
+            children.push(defaultArgumentSpecifier());
         }
 
         return Phrase.create(PhraseType.ParameterDeclaration, children);
+    }
+
+    function defaultArgumentSpecifier(){
+        const equals = next();
+        const expr = expression(0);
+        return Phrase.create(PhraseType.DefaultArgumentSpecifier, [equals, expr]);
     }
 
     function variable(variableAtomNode: Phrase | Token) {

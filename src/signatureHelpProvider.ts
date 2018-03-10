@@ -176,7 +176,7 @@ export class SignatureHelpProvider {
                 return undefined;
             case PhraseType.ObjectCreationExpression:
                 if (traverser.child(this._isClassTypeDesignator) && traverser.child(this._isNamePhraseOrRelativeScope)) {
-                    return this.symbolStore.findSymbolsByReference(traverser.reference, MemberMergeStrategy.Override).shift();
+                    return this.symbolStore.findSymbolsByReference(traverser.reference, MemberMergeStrategy.First).shift();
                 }
                 return undefined;
 

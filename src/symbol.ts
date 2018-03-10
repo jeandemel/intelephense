@@ -42,7 +42,14 @@ export const enum SymbolModifier {
     Anonymous = 1 << 9,
     Reference = 1 << 10,
     Variadic = 1 << 11,
-    Use = 1 << 12
+    Use = 1 << 12,
+    TypeDeclared = 1 << 13,
+    TypeDocumented = 1 << 14,
+    TypeInferred = 1 << 15,
+    Documented = 1 << 16,
+    Optional = 1 << 17,
+    TraitInsteadOf = 1 << 18,
+    TraitAs = 1 << 19
 }
 
 export interface PhpSymbolDoc {
