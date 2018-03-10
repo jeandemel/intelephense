@@ -43,7 +43,6 @@ export class TypePass implements TreeVisitor<Phrase | Token> {
 
     constructor(
         public doc: ParsedDocument,
-        public nameResolver: NameResolver,
         public symbolStore: SymbolStore,
     ) {
         this._transformerStack = [];
@@ -63,26 +62,31 @@ export class TypePass implements TreeVisitor<Phrase | Token> {
                 return false;
 
             case PhraseType.NamespaceName:
-                if (parent && (<Phrase>parent).phraseType === PhraseType.NamespaceDefinitionHeader && (<ReferencePhrase>node).reference) {
-                    this.nameResolver.namespaceName = (<ReferencePhrase>node).reference.name;
-                }
                 this._transformerStack.push(new NamespaceNameTransformer(<Phrase>node, this._findSymbolsByReference));
                 break;
 
-            case PhraseType.ClassDeclarationHeader:
-            case PhraseType.InterfaceDeclarationHeader:
-            case PhraseType.TraitDeclarationHeader:
-            case PhraseType.AnonymousClassDeclarationHeader:
-                if ((<ReferencePhrase>node).reference && (<ReferencePhrase>node).reference.name) {
-                    const typeAggregate = TypeAggregate.create(this.symbolStore, (<ReferencePhrase>node).reference.name);
-                    this.nameResolver.pushClass((<ReferencePhrase>node).reference.name, typeAggregate.baseClassName());
+            case PhraseType.ClassDeclaration:
+            case PhraseType.InterfaceDeclaration:
+            case PhraseType.TraitDeclaration:
+            case PhraseType.AnonymousClassDeclaration:
+                {
+                    const ref = (<Phrase>node).children.length ? (<ReferencePhrase>(<Phrase>node).children[0]).reference : undefined;
+                    if (!ref || !ref.name) {
+                        break;
+                    }
+                    const typeAggregate = TypeAggregate.create(this.symbolStore, ref.name);
+                    let type = '$this';
+                    if (ParsedDocument.isPhrase(node, [PhraseType.ClassDeclaration, PhraseType.AnonymousClassDeclaration])) {
+                        type = ref.name;
+                    }
                     this._classTypeAggregateStack.push(typeAggregate);
                     this._variableTable.pushScope();
                     this._variableTable.setVariable({
                         name: '$this',
-                        type: (<ReferencePhrase>node).reference.name
+                        type: type
                     });
                 }
+
                 break;
 
             case PhraseType.FunctionCallExpression:
@@ -97,7 +101,7 @@ export class TypePass implements TreeVisitor<Phrase | Token> {
             case PhraseType.ParameterDeclaration:
                 {
                     const methodDecl = spine.length > 1 ? spine[spine.length - 2] : undefined;
-                    if(!methodDecl || !(<ReferencePhrase>methodDecl).reference || !(<ReferencePhrase>methodDecl).reference.name) {
+                    if (!methodDecl || !(<ReferencePhrase>methodDecl).reference || !(<ReferencePhrase>methodDecl).reference.name) {
                         break;
                     }
                     this._transformerStack.push(
@@ -114,16 +118,24 @@ export class TypePass implements TreeVisitor<Phrase | Token> {
                 break;
 
             case PhraseType.FunctionDeclaration:
-                this._variableTable.pushScope();
-                break;
-
             case PhraseType.MethodDeclaration:
-                this._variableTable.pushScope(['$this']);
-                break;
-
             case PhraseType.AnonymousFunctionCreationExpression:
-                this._variableTable.pushScope(['$this']);
-                this._transformerStack.push(new PlaceholderTransformer(node, 'callable'));
+                {
+                    if((<Phrase>node).phraseType === PhraseType.FunctionDeclaration) {
+                        this._variableTable.pushScope()
+                    } else {
+                        this._variableTable.pushScope(['$this']);
+                    }
+
+                    const ref = (<Phrase>node).children.length ? (<ReferencePhrase>(<Phrase>node).children[0]).reference : undefined;
+                    if(!ref || !ref.name) {
+                        break;
+                    }
+                    const def = this._findFileSymbolsByReference(ref).shift();
+                    if(def) {
+                        this._transformerStack.push(new CallableDeclarationTransformer(node, def));
+                    }
+                }
                 break;
 
             case PhraseType.IfStatement:
@@ -170,6 +182,11 @@ export class TypePass implements TreeVisitor<Phrase | Token> {
                 this._transformerStack.push(new CatchNameListTransformer(node));
                 break;
 
+            case PhraseType.FunctionDeclarationBody:
+            case PhraseType.MethodDeclarationBody:
+                this._transformerStack.push(new CallableDeclarationBodyTransformer(node));
+                break;
+
             case PhraseType.QualifiedName:
             case PhraseType.FullyQualifiedName:
             case PhraseType.RelativeQualifiedName:
@@ -177,13 +194,16 @@ export class TypePass implements TreeVisitor<Phrase | Token> {
             case PhraseType.ArrayValue:
             case PhraseType.EncapsulatedExpression:
             case PhraseType.ArrayElement:
-            case PhraseType.ReturnStatement:
             case PhraseType.ForeachCollection:
             case PhraseType.CloneExpression:
             case PhraseType.ErrorControlExpression:
             case PhraseType.ConstantAccessExpression:
             case PhraseType.DefaultArgumentSpecifier:
                 this._transformerStack.push(new DefaultTransformer(node));
+                break;
+
+            case PhraseType.ReturnStatement:
+                this._transformerStack.push(new ReturnStatementTransformer(node));
                 break;
 
             case PhraseType.UnaryOpExpression:
@@ -366,57 +386,6 @@ export class TypePass implements TreeVisitor<Phrase | Token> {
 
     }
 
-    private _parameterDeclaration(node: Phrase, spine: (Phrase | Token)[]) {
-
-        const ref = (<ReferencePhrase>node).reference;
-        if (!ref) {
-            return;
-        }
-
-        if (ref.type) {
-            this._variableTable.setVariable({
-                name: ref.name,
-                type: ref.type
-            });
-            return;
-        }
-
-        //search for a base method that has param types defined
-        if (spine.length < 2) {
-            return;
-        }
-
-        const methodRef = (<ReferencePhrase>spine[spine.length - 2]).reference;
-        const classAggregate = this._currentClass();
-        if (!classAggregate || !methodRef || methodRef.kind !== SymbolKind.Method) {
-            return;
-        }
-
-        const lcName = ref.name.toLowerCase();
-        const hasTypedParam = (p: PhpSymbol) => {
-            return p.kind === SymbolKind.Parameter && p.name === ref.name && p.type !== undefined && p.type !== '';
-        }
-        let type: string;
-        const member = classAggregate.firstMember(s => {
-            if (s.kind === SymbolKind.Method && lcName === s.name.toLowerCase()) {
-                const p = PhpSymbol.findChild(s, hasTypedParam);
-                if (p) {
-                    type = p.type;
-                    return true;
-                }
-            }
-            return false;
-        });
-
-        if (type) {
-            this._variableTable.setVariable({
-                name: ref.name,
-                type: type
-            });
-        }
-
-    }
-
     private _currentClassName() {
         const c = this._currentClass();
         return c ? c.name : '';
@@ -443,9 +412,9 @@ export class TypePass implements TreeVisitor<Phrase | Token> {
         }
     }
 
-    private _findFileSymbolsByReference = (ref:Reference) => {
+    private _findFileSymbolsByReference = (ref: Reference) => {
         const table = this.symbolStore.getSymbolTable(this.doc.uri);
-        const fn = (s:PhpSymbol) => {
+        const fn = (s: PhpSymbol) => {
             return s.kind === ref.kind && ref.name === s.name;
         }
         const s = table.find(fn);
@@ -458,22 +427,71 @@ export class TypePass implements TreeVisitor<Phrase | Token> {
 
 }
 
+class CallableDeclarationTransformer implements TypeTransformer {
+
+    type = 'callable';
+    constructor(public node: Phrase | Token, public definition: PhpSymbol) { }
+    push(transformer: NodeTransformer) {
+        if (
+            (<Phrase>transformer.node).phraseType === PhraseType.FunctionDeclarationBody ||
+            (<Phrase>transformer.node).phraseType === PhraseType.MethodDeclarationBody
+        ) {
+            const type = (<TypeTransformer>transformer).type;
+            if(type && !this.definition.type) {
+                this.definition.type = type;
+            }
+        }
+    }
+}
+
+class CallableDeclarationBodyTransformer implements TypeTransformer {
+
+    type = 'void';
+
+    constructor(public node: Phrase | Token) { }
+    push(transformer: NodeTransformer) {
+        //aggregate return or yield types
+        const type = (<TypeTransformer>transformer).type;
+        if (!type) {
+            return;
+        }
+
+        if (
+            (<Phrase>transformer.node).phraseType === PhraseType.ReturnStatement ||
+            (<Phrase>transformer.node).phraseType === PhraseType.YieldFromExpression
+        ) {
+            if (type && this.type === 'void') {
+                this.type = type;
+            } else if (type) {
+                this.type = TypeString.merge(this.type, type);
+            }
+        } else if ((<Phrase>transformer.node).phraseType === PhraseType.YieldExpression) {
+            if (type && this.type === 'void') {
+                this.type = TypeString.arrayReference(type);
+            } else if (type) {
+                this.type = TypeString.merge(this.type, TypeString.arrayReference(type));
+            }
+        }
+    }
+
+}
+
 class CastExpressionTransformer implements TypeTransformer {
 
-    private _op:TokenType;
+    private _op: TokenType;
     type = '';
-    
-    constructor(public node:Phrase|Token) { 
-        if((<Phrase>node).children.length > 1) {
+
+    constructor(public node: Phrase | Token) {
+        if ((<Phrase>node).children.length > 1) {
             this._op = (<Token>(<Phrase>node).children[0]).tokenType;
             this.type = this._opToType(this._op);
         }
     }
 
-    push(transformer:NodeTransformer) { }
+    push(transformer: NodeTransformer) { }
 
-    private _opToType(op:TokenType) {
-        switch(op) {
+    private _opToType(op: TokenType) {
+        switch (op) {
             case TokenType.ObjectCast:
                 return 'object';
             case TokenType.StringCast:
@@ -496,33 +514,33 @@ class CastExpressionTransformer implements TypeTransformer {
 }
 
 class UnaryOpExpressionTransformer implements TypeTransformer {
-    
-    private _op:TokenType;
+
+    private _op: TokenType;
     type = '';
-    
-    constructor(public node:Phrase|Token) { 
-        if((<Phrase>node).children.length > 1) {
+
+    constructor(public node: Phrase | Token) {
+        if ((<Phrase>node).children.length > 1) {
             this._op = (<Token>(<Phrase>node).children[0]).tokenType;
         }
     }
 
-    push(transformer:NodeTransformer) {
+    push(transformer: NodeTransformer) {
         //op should not get pushed
         const t = (<TypeTransformer>transformer).type;
-        switch(this._op) {
+        switch (this._op) {
             case TokenType.Exclamation:
                 this.type = 'bool';
                 break;
             case TokenType.Plus:
             case TokenType.Minus:
-                if(t === 'float'){
+                if (t === 'float') {
                     this.type = 'float';
                 } else {
                     this.type = 'int';
                 }
                 break;
             case TokenType.Tilde:
-                if(t === 'string') {
+                if (t === 'string') {
                     this.type = 'string';
                 } else {
                     this.type = 'int';
@@ -536,8 +554,8 @@ class UnaryOpExpressionTransformer implements TypeTransformer {
 
 class PlaceholderTransformer implements TypeTransformer {
 
-    constructor(public node:Phrase|Token, public type:string) { }
-    push(transformer:NodeTransformer) { }
+    constructor(public node: Phrase | Token, public type: string) { }
+    push(transformer: NodeTransformer) { }
 }
 
 class TokenTransformer implements TypeTransformer {
@@ -920,15 +938,15 @@ class FunctionCallExpressionTransformer implements TypeTransformer {
 
     push(transformer: NodeTransformer) {
 
-        if((<Phrase>this.node).children.length < 1) {
+        if ((<Phrase>this.node).children.length < 1) {
             return;
         }
 
         if (
             (<Phrase>this.node).children[0] === transformer.node &&
             ((<Phrase>transformer.node).phraseType === PhraseType.QualifiedName ||
-            (<Phrase>transformer.node).phraseType === PhraseType.QualifiedName ||
-            (<Phrase>transformer.node).phraseType === PhraseType.RelativeQualifiedName)
+                (<Phrase>transformer.node).phraseType === PhraseType.QualifiedName ||
+                (<Phrase>transformer.node).phraseType === PhraseType.RelativeQualifiedName)
         ) {
             const ref = (<ReferencePhrase>transformer.node).reference;
             this.type = this.findSymbolsFn(ref).reduce(symbolsToTypeReduceFn, '');
@@ -1054,20 +1072,20 @@ class MemberAccessExpressionTransformer implements TypeTransformer {
 class ConstElementTransformer implements NodeTransformer {
 
 
-    constructor(public node:Phrase|Token, private classAggregate:TypeAggregate) { }
+    constructor(public node: Phrase | Token, private classAggregate: TypeAggregate) { }
 
     push(transformer: NodeTransformer) {
         const ref = (<ReferencePhrase>this.node).reference;
-        if(!ref || ref.type || (<Phrase>this.node).children.length < 3 || (<Phrase>this.node).children[2] === transformer.node) {
+        if (!ref || ref.type || (<Phrase>this.node).children.length < 3 || (<Phrase>this.node).children[2] === transformer.node) {
             return;
         }
 
         //infer type from initialiser
         const t = (<TypeTransformer>transformer).type;
-        const s = this.classAggregate.firstMember((s)=>{
+        const s = this.classAggregate.firstMember((s) => {
             return s.name === ref.name && s.kind === ref.kind;
         });
-        if(t && s) {
+        if (t && s) {
             ref.type = t;
             s.type = t;
         }
@@ -1078,27 +1096,27 @@ class ConstElementTransformer implements NodeTransformer {
 
 class PropertyElementTransformer implements NodeTransformer {
 
-    private _ref:Reference;
+    private _ref: Reference;
 
-    constructor(public node:Phrase|Token, private classAggregate:TypeAggregate) { 
+    constructor(public node: Phrase | Token, private classAggregate: TypeAggregate) {
 
         this._ref = (<ReferencePhrase>this.node).reference;
 
     }
 
-    push(transformer:NodeTransformer) {
+    push(transformer: NodeTransformer) {
 
-        if(
+        if (
             (<Phrase>transformer.node).phraseType === PhraseType.PropertyInitialiser &&
             this._ref &&
             !this._ref.type
         ) {
             //infer type from initialiser
             const t = (<TypeTransformer>transformer).type;
-            const s = this.classAggregate.firstMember((s)=>{
+            const s = this.classAggregate.firstMember((s) => {
                 return s.name === this._ref.name && s.kind === SymbolKind.Property;
             });
-            if(t && s) {
+            if (t && s) {
                 this._ref.type = t;
                 s.type = t;
             }
@@ -1110,13 +1128,13 @@ class PropertyElementTransformer implements NodeTransformer {
 
 class ParameterDeclarationTransformer implements NodeTransformer {
 
-    private _ref:Reference;
+    private _ref: Reference;
 
     constructor(
-        public node: Phrase | Token, 
-        public variableTable:VariableTable,    
-        private classAggregate:ClassAggregate,
-        private methodName:string
+        public node: Phrase | Token,
+        public variableTable: VariableTable,
+        private classAggregate: ClassAggregate,
+        private methodName: string
     ) {
 
         this._ref = (<ReferencePhrase>node).reference;
@@ -1157,27 +1175,27 @@ class ParameterDeclarationTransformer implements NodeTransformer {
             });
         }
 
-     }
+    }
 
     push(transformer: NodeTransformer) {
-        if((<Phrase>transformer.node).phraseType === PhraseType.DefaultArgumentSpecifier && this._ref && !this._ref.type) {
+        if ((<Phrase>transformer.node).phraseType === PhraseType.DefaultArgumentSpecifier && this._ref && !this._ref.type) {
             const lcMethodName = this.methodName.toLowerCase();
             const type = (<TypeTransformer>transformer).type;
-            if(!type) {
+            if (!type) {
                 return;
             }
-            const fn = (s:PhpSymbol) => {
+            const fn = (s: PhpSymbol) => {
                 return s.kind === SymbolKind.Method && lcMethodName === s.name.toLowerCase();
             }
             const member = this.classAggregate.firstMember(fn);
-            if(!member) {
+            if (!member) {
                 return;
             }
             const paramName = this._ref.name;
             const paramDecl = PhpSymbol.findChild(member, p => {
-                return p.kind === SymbolKind.Parameter && p.name === paramName; 
+                return p.kind === SymbolKind.Parameter && p.name === paramName;
             });
-            if(paramDecl) {
+            if (paramDecl) {
                 paramDecl.type = type;
                 this.variableTable.setVariable({
                     name: this._ref.name,
