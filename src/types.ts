@@ -4,7 +4,7 @@
 
 'use strict';
 
-import { Range, Position } from 'vscode-languageserver-types';
+import * as lsp from 'vscode-languageserver-types';
 import * as util from './util';
 
 export interface Predicate<T> {
@@ -785,15 +785,42 @@ export namespace PackedPosition {
     export function character(packedPosition:number) {
         return packedPosition & 0x7ff;
     }
+
+    export function fromLspPosition(pos:lsp.Position) {
+        return pack(pos.line, pos.character);
+    }
+
+    export function toLspPosition(packedPosition:number) {
+        return <lsp.Position> {
+            line: line(packedPosition),
+            character: character(packedPosition)
+        }
+    }
 }
 
-export type PackedRange = {
-    start: number, 
-    end: number
+export interface PackedRange{
+    start: number;
+    end: number;
 };
 
+export namespace PackedRange {
+    export function toLspRange(range:PackedRange) {
+        return <lsp.Range> {
+            start: PackedPosition.toLspPosition(range.start),
+            end: PackedPosition.toLspPosition(range.end)
+        }
+    }
+
+    export function fromLspRange(range:lsp.Range) {
+        return <PackedRange> {
+            start: PackedPosition.fromLspPosition(range.start),
+            end: PackedPosition.fromLspPosition(range.end)
+        }
+    }
+}
+
 export interface Locatable extends TreeLike {
-    location: {range:Range};
+    location: {range:lsp.Range};
 }
 
 export class FindByStartPositionTraverser<T extends Locatable> {
@@ -804,7 +831,7 @@ export class FindByStartPositionTraverser<T extends Locatable> {
         this._search = new BinarySearch([]);
     }
 
-    find(position:Position, node:T) {
+    find(position:lsp.Position, node:T) {
 
         let found:T;
         let compareFn: (t: T) => number = t => {

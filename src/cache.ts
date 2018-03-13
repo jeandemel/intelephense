@@ -14,6 +14,7 @@ export interface Cache {
     read(key: string): Promise<any>;
     write(key: string, data: any): Promise<void>;
     delete(key: string): Promise<void>;
+    readSync(key:string):any;
     flush(): Promise<void>;
 }
 

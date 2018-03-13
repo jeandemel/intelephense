@@ -4,48 +4,38 @@
 
 'use strict';
 
-import { PhpSymbol, SymbolKind, SymbolModifier } from './symbol';
-import { Reference, ReferenceTable } from './reference';
-import { SymbolStore, SymbolTable } from './symbolStore';
-import { NameResolver } from './nameResolver';
-import { TreeVisitor, TreeTraverser, Predicate, MultiVisitor } from './types';
-import { TypeString } from './typeString';
-import { ParsedDocument } from './parsedDocument';
+import { PhpSymbol, SymbolKind, SymbolModifier } from '../symbol';
+import { Reference, ReferenceTable } from '../reference';
+import { SymbolStore, SymbolTable } from '../symbolStore';
+import { NameResolver } from '../nameResolver';
+import { TreeVisitor, TreeTraverser, Predicate } from '../types';
+import { TypeString } from '../typeString';
+import { Document } from './document';
 import { Position, TextEdit, Range } from 'vscode-languageserver-types';
-import { Phrase, Token, PhraseType, TokenType, } from 'php7parser';
-import * as util from './util';
+import { Phrase, PhraseType } from '../parser/phrase';
+import {Token, TokenType} from '../parser/lexer';
+import * as util from '../util';
+import { ParseTree } from './parseTree';
 
 export class ParseTreeTraverser extends TreeTraverser<Phrase | Token> {
 
-    private _doc: ParsedDocument;
     private _symbolTable: SymbolTable;
-    private _refTable:ReferenceTable;
 
-    constructor(document: ParsedDocument, symbolTable: SymbolTable, refTable:ReferenceTable) {
-        super([document.tree]);
-        this._doc = document;
+    constructor(private parseTree: ParseTree, symbolTable: SymbolTable) {
+        super(<(Phrase|Token)[]>[parseTree.root]);
         this._symbolTable = symbolTable;
-        this._refTable = refTable;
-    }
-
-    get document() {
-        return this._doc;
     }
 
     get symbolTable() {
         return this._symbolTable;
     }
 
-    get refTable() {
-        return this._refTable;
-    }
-
     get text() {
-        return this._doc.nodeText(this.node);
+        return this.parseTree.nodeText(this.node);
     }
 
     get range() {
-        return this._doc.nodeRange(this.node);
+        return this.parseTree.nodeRange(this.node);
     }
 
     get reference() {
@@ -62,7 +52,7 @@ export class ParseTreeTraverser extends TreeTraverser<Phrase | Token> {
     }
 
     get nameResolver() {
-        let firstToken = ParsedDocument.firstToken(this.node);
+        let firstToken = Document.firstToken(this.node);
         let pos = this.document.positionAtOffset(firstToken.offset);
         return this._symbolTable.nameResolver(pos);
     }

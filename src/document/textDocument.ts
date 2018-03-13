@@ -4,8 +4,9 @@
 
 'use strict';
 
-import { BinarySearch } from './types';
-import { Phrase, Token } from 'php7parser';
+import { BinarySearch } from '../types';
+import { Phrase} from '../parser/phrase';
+import { Token } from '../parser/lexer';
 import { Position, Range } from 'vscode-languageserver-types';
 
 export class TextDocument {
