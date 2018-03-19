@@ -12,8 +12,8 @@ import { TreeVisitor, TreeTraverser, Predicate } from '../types';
 import { TypeString } from '../typeString';
 import { Document } from './document';
 import { Position, TextEdit, Range } from 'vscode-languageserver-types';
-import { Phrase, PhraseType } from '../parser/phrase';
-import {Token, TokenType} from '../parser/lexer';
+import { Phrase, PhraseKind } from '../parser/phrase';
+import {Token, TokenKind} from '../parser/lexer';
 import * as util from '../util';
 import { ParseTree } from './parseTree';
 
@@ -112,7 +112,7 @@ export class ParseTreeTraverser extends TreeTraverser<Phrase | Token> {
     private _lastToken(spine:(Phrase|Token)[], skipTrivia?:boolean) {
 
         let node = spine[spine.length - 1];
-        if((<Token>node).tokenType !== undefined && (!skipTrivia || (<Token>node).tokenType < TokenType.Comment)) {
+        if((<Token>node).tokenType !== undefined && (!skipTrivia || (<Token>node).tokenType < TokenKind.Comment)) {
             return spine;
         }
 
@@ -146,8 +146,8 @@ export class ParseTreeTraverser extends TreeTraverser<Phrase | Token> {
             return false;
         }
 
-        return ((t.tokenType === TokenType.Name || t.tokenType === TokenType.VariableName) && this._isDeclarationPhrase(parent)) ||
-            (parent.phraseType === PhraseType.Identifier && this._isDeclarationPhrase(<Phrase>traverser.parent()));
+        return ((t.tokenType === TokenKind.Name || t.tokenType === TokenKind.VariableName) && this._isDeclarationPhrase(parent)) ||
+            (parent.phraseType === PhraseKind.Identifier && this._isDeclarationPhrase(<Phrase>traverser.parent()));
 
     }
 
@@ -158,15 +158,15 @@ export class ParseTreeTraverser extends TreeTraverser<Phrase | Token> {
         }
 
         switch (node.phraseType) {
-            case PhraseType.ClassDeclarationHeader:
-            case PhraseType.TraitDeclarationHeader:
-            case PhraseType.InterfaceDeclarationHeader:
-            case PhraseType.PropertyElement:
-            case PhraseType.ConstElement:
-            case PhraseType.ParameterDeclaration:
-            case PhraseType.FunctionDeclarationHeader:
-            case PhraseType.MethodDeclarationHeader:
-            case PhraseType.ClassConstElement:
+            case PhraseKind.ClassDeclarationHeader:
+            case PhraseKind.TraitDeclarationHeader:
+            case PhraseKind.InterfaceDeclarationHeader:
+            case PhraseKind.PropertyElement:
+            case PhraseKind.ConstElement:
+            case PhraseKind.ParameterDeclaration:
+            case PhraseKind.FunctionDeclarationHeader:
+            case PhraseKind.MethodDeclarationHeader:
+            case PhraseKind.ClassConstElement:
                 return true;
             default:
                 return false;

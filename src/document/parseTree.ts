@@ -4,16 +4,25 @@
 
 'use strict';
 
-import { Traversable, Predicate, TreeTraverser, TreeVisitor } from "../types";
-import { Phrase, PhraseType } from "../parser/phrase";
-import { Token, TokenType } from "../parser/lexer";
+import { Traversable, Predicate, TreeTraverser, TreeVisitor, PackedLocation, PackedRange } from "../types";
+import { Phrase, PhraseKind } from "../parser/phrase";
+import { Token, TokenKind } from "../parser/lexer";
 import * as lsp from 'vscode-languageserver-types';
 import { Document } from "./document";
 import { ParseTreeTraverser } from "./parseTreeTraverser";
+import { UriMap } from "./uriMap";
 
 export class NodeUtils {
 
     constructor(private parseTree:ParseTree) { }
+
+    nodePackedLocation(node: Phrase | Token) {
+        const location = this.nodeLocation(node);
+        return <PackedLocation>{
+            uriId: UriMap.id(location.uri),
+            range: PackedRange.fromLspRange(location.range)
+        }
+    }
 
     nodeLocation(node: Phrase | Token) {
         return this.parseTree.nodeLocation(node);
@@ -67,12 +76,12 @@ export namespace NodeUtils {
         return undefined;
     }
 
-    export function isToken(node: Phrase | Token, types?: TokenType[]) {
+    export function isToken(node: Phrase | Token, types?: TokenKind[]) {
         return node && (<Token>node).tokenType !== undefined &&
             (!types || types.indexOf((<Token>node).tokenType) > -1);
     }
 
-    export function isPhrase(node: Phrase | Token, types?: PhraseType[]) {
+    export function isPhrase(node: Phrase | Token, types?: PhraseKind[]) {
         return node && (<Phrase>node).phraseType !== undefined &&
             (!types || types.indexOf((<Phrase>node).phraseType) > -1);
     }
@@ -143,9 +152,9 @@ export namespace NodeUtils {
         }
 
         switch ((<Phrase>node).phraseType) {
-            case PhraseType.QualifiedName:
-            case PhraseType.RelativeQualifiedName:
-            case PhraseType.FullyQualifiedName:
+            case PhraseKind.QualifiedName:
+            case PhraseKind.RelativeQualifiedName:
+            case PhraseKind.FullyQualifiedName:
                 return true;
             default:
                 return false;
@@ -293,14 +302,14 @@ class DocumentLanguageRangesVisitor implements TreeVisitor<Phrase | Token> {
     preorder(node: Phrase | Token, spine: (Phrase | Token)[]) {
 
         switch ((<Token>node).tokenType) {
-            case TokenType.Text:
+            case TokenKind.Text:
                 this._ranges.push({ range: this.nodeUtils.nodeRange(<Token>node) });
                 break;
-            case TokenType.OpenTag:
-            case TokenType.OpenTagEcho:
+            case TokenKind.OpenTag:
+            case TokenKind.OpenTagEcho:
                 this._phpOpenPosition = this.nodeUtils.nodeRange(<Token>node).start;
                 break;
-            case TokenType.CloseTag:
+            case TokenKind.CloseTag:
                 {
                     let closeTagRange = this.nodeUtils.nodeRange(<Token>node);
                     this._ranges.push({

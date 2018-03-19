@@ -51,17 +51,8 @@ export class Event<T> {
 }
 
 export interface PackedLocation {
-    uriHash: number;
+    uriId: number;
     range: PackedRange;
-}
-
-export namespace HashedLocation {
-    export function create(uriHash: number, range: PackedRange) {
-        return <PackedLocation>{
-            uriHash: uriHash,
-            range: range
-        };
-    }
 }
 
 export interface TreeLike {
@@ -537,18 +528,22 @@ export interface NameIndexNode<T> {
 }
 
 export type KeysDelegate<T> = (t: T) => string[];
+export type EqualityDelegate<T> = (a:T, b:T) => boolean;
 
 export class NameIndex<T> {
 
     private _nodeArray: NameIndexNode<T>[];
     private _binarySearch: BinarySearch<NameIndexNode<T>>;
     private _collator: Intl.Collator;
-    private _equalityFn: (a:T, b:T) => boolean;
+    private _equalityFn: EqualityDelegate<T>;
 
-    constructor() {
+    constructor(equalityFn?:EqualityDelegate<T>) {
         this._nodeArray = [];
         this._binarySearch = new BinarySearch<NameIndexNode<T>>(this._nodeArray);
         this._collator = new Intl.Collator('en');
+        if(equalityFn) {
+            this._equalityFn = equalityFn;
+        }
     }
 
     set equalityFn(fn: (a: T, b: T) => boolean) {
@@ -628,20 +623,6 @@ export class NameIndex<T> {
 
         return Array.from(new Set<T>(matches));
 
-    }
-
-    *matchIterator(text: string) {
-        text = text.toLowerCase();
-        const nodes = this._nodeMatch(text);
-        const matches = new Set<T>();
-        let node: NameIndexNode<T>;
-
-        for (let n = 0, l = nodes.length; n < l; ++n) {
-            node = nodes[n];
-            for (let k = 0, i = node.items.length; k < i; ++k) {
-                yield node.items[k];
-            }
-        }
     }
 
     /**

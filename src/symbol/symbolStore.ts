@@ -4,12 +4,13 @@
 
 'use strict';
 
-import { PhpSymbol, SymbolKind, SymbolModifier, SymbolIdentifier } from './symbol';
+import { Definition, SymbolKind, SymbolModifier, SymbolIdentifier } from './symbol';
 import { Reference } from './reference';
 import {
     TreeTraverser, Predicate, TreeVisitor, Traversable, BinarySearch, NameIndex, PackedLocation, FindByStartPositionTraverser,
-    NameIndexNode
-} from './types';
+    NameIndexNode,
+    Unsubscribe
+} from '../types';
 import { Position, Location, Range } from 'vscode-languageserver-types';
 import { TypeString } from './typeString';
 import * as builtInSymbols from './builtInSymbols.json';
@@ -20,15 +21,19 @@ import * as util from './util';
 import { TypeAggregate, MemberMergeStrategy } from './typeAggregate';
 import { ReferenceReader } from './referenceReader';
 import * as uriMap from './uriMap';
+import { DocumentStore, DocumentChangeEventArgs, DocumentAddEventArgs, DocumentLoadEventArgs, DocumentRemoveEventArgs, Document } from '../document/document';
+import { Phrase, PhraseKind } from '../parser/phrase';
+import { Token } from '../parser/lexer';
+import { ReferencePhrase } from '../transformers/transformers';
 
 const builtInsymbolsUri = 'php';
 
-export class SymbolTable implements Traversable<PhpSymbol> {
+export class SymbolTable implements Traversable<Definition> {
 
     private _uri: string;
-    private _root: PhpSymbol;
+    private _root: Definition;
 
-    constructor(uri: string, root: PhpSymbol) {
+    constructor(uri: string, root: Definition) {
         this._uri = uri;
         this._root = root;
     }
@@ -60,9 +65,9 @@ export class SymbolTable implements Traversable<PhpSymbol> {
         this.traverse(visitor);
     }
 
-    parent(s: PhpSymbol) {
+    parent(s: Definition) {
         let traverser = new TreeTraverser([this.root]);
-        let fn = (x: PhpSymbol) => {
+        let fn = (x: Definition) => {
             return x === s;
         };
         if (!traverser.find(fn)) {
@@ -72,7 +77,7 @@ export class SymbolTable implements Traversable<PhpSymbol> {
         return traverser.parent();
     }
 
-    traverse<T extends TreeVisitor<PhpSymbol>>(visitor: T) {
+    traverse<T extends TreeVisitor<Definition>>(visitor: T) {
         let traverser = new TreeTraverser([this.root]);
         traverser.traverse(visitor);
         return visitor;
@@ -82,12 +87,12 @@ export class SymbolTable implements Traversable<PhpSymbol> {
         return new TreeTraverser([this.root]);
     }
 
-    filter(predicate: Predicate<PhpSymbol>) {
+    filter(predicate: Predicate<Definition>) {
         let traverser = new TreeTraverser([this.root]);
         return traverser.filter(predicate)
     }
 
-    find(predicate: Predicate<PhpSymbol>) {
+    find(predicate: Predicate<Definition>) {
         let traverser = new TreeTraverser([this.root]);
         return traverser.find(predicate);
     }
@@ -120,21 +125,21 @@ export class SymbolTable implements Traversable<PhpSymbol> {
 
     symbolAtPosition(position: Position) {
 
-        let pred = (x: PhpSymbol) => {
+        let pred = (x: Definition) => {
             return x.location && util.positionEquality(x.location.range.start, position);
         };
 
         return this.filter(pred).pop();
     }
 
-    contains(s: PhpSymbol) {
+    contains(s: Definition) {
         let traverser = new TreeTraverser([this.root]);
         let visitor = new ContainsVisitor(s);
         traverser.traverse(visitor);
         return visitor.found;
     }
 
-    private _isScopeSymbol(s: PhpSymbol) {
+    private _isScopeSymbol(s: Definition) {
         const mask = SymbolKind.Class | SymbolKind.Interface | SymbolKind.Trait | SymbolKind.None | SymbolKind.Function | SymbolKind.Method;
         return (s.kind & mask) > 0;
     }
@@ -168,9 +173,9 @@ export class SymbolTable implements Traversable<PhpSymbol> {
 
 }
 
-class ScopedVariablePruneVisitor implements TreeVisitor<PhpSymbol> {
+class ScopedVariablePruneVisitor implements TreeVisitor<Definition> {
 
-    preorder(node: PhpSymbol, spine: PhpSymbol[]) {
+    preorder(node: Definition, spine: Definition[]) {
 
         if ((node.kind === SymbolKind.Function || node.kind === SymbolKind.Method) && node.children) {
             node.children = node.children.filter(this._isNotVar);
@@ -179,28 +184,58 @@ class ScopedVariablePruneVisitor implements TreeVisitor<PhpSymbol> {
         return true;
     }
 
-    private _isNotVar(s: PhpSymbol) {
+    private _isNotVar(s: Definition) {
         return s.kind !== SymbolKind.Variable;
     }
 
 
 }
 
-export interface HashedStartLocation {
-    uriHash: number;
+export interface PackedStartLocation {
+    uriId: number;
     start: Position;
 }
 
 export class SymbolStore {
 
-    private _tableIndex: { [id: number]: SymbolTable };
-    private _symbolIndex: NameIndex<HashedStartLocation>;
+    private _definitionIndex: NameIndex<Definition>;
+    private _referenceIndex:NameIndex<number>; //just keep a name -> uriId record here
     private _symbolCount: number;
+    private _unsubscribe:Unsubscribe[];
 
-    constructor() {
-        this._tableIndex = {};
-        this._symbolIndex = new NameIndex<HashedStartLocation>();
+    private _onDocChange = (args:DocumentChangeEventArgs) => {
+        this._remove(args.oldDoc);
+        this._add(args.doc);
+    }
+
+    private _onDocAdd = (args:DocumentAddEventArgs) => {
+        //if doc already exists replace it
+        if(args.cachedDoc) {
+            this._remove(args.cachedDoc);
+        }
+
+        this._add(args.doc);
+    }
+
+    private _onDocLoad = (args:DocumentLoadEventArgs) => {
+        //make sure defintions in index 
+        this._remove(args.doc);
+        this._add(args.doc);
+    }
+
+    private _onDocRemove = (args:DocumentRemoveEventArgs) => {
+        this._remove(args.doc);
+    }
+
+    constructor(private docStore:DocumentStore) {
+        this._referenceIndex = new NameIndex<number>();
+        this._definitionIndex = new NameIndex<Definition>(Definition.isEqual);
         this._symbolCount = 0;
+        this._unsubscribe = [];
+        this._unsubscribe.push(this.docStore.documentAddEvent.subscribe(this._onDocAdd));
+        this._unsubscribe.push(this.docStore.documentChangeEvent.subscribe(this._onDocChange));
+        this._unsubscribe.push(this.docStore.documentRemoveEvent.subscribe(this._onDocRemove));
+        this._unsubscribe.push(this.docStore.documentLoadEvent.subscribe(this._onDocLoad));
     }
 
     onParsedDocumentChange = (args: ParsedDocumentChangeEventArgs) => {
@@ -210,7 +245,8 @@ export class SymbolStore {
     };
 
     getSymbolTable(uri: string) {
-        return this._tableIndex[uriMap.id(uri)];
+        const doc = this.docStore.find(uri);
+        return doc ? doc.symbolTable : undefined;
     }
 
     getSymbolTableById(id:number) {
@@ -225,37 +261,27 @@ export class SymbolStore {
         return this._symbolCount;
     }
 
-    add(symbolTable: SymbolTable) {
-        //if table already exists replace it
-        this.remove(symbolTable.uri);
-        let id = uriMap.id(symbolTable.uri);
-        this._tableIndex[id] = symbolTable;
-        let indexItems = symbolTable.traverse(new IndexableSymbolVisitor(id)).items;
-        for (let n = 0; n < indexItems.length; ++n) {
-            this._symbolIndex.add(indexItems[n].start, indexItems[n].keys);
+    private _add(doc:Document) {
+        const indexItems = doc.symbolTable.filter(this._indexFilter);
+        for (let n = 0, l = indexItems.length; n < l; ++n) {
+            this._definitionIndex.add(indexItems[n], Definition.keys(indexItems[n]));
         }
-        this._symbolCount += symbolTable.symbolCount;
+        this._symbolCount += doc.symbolTable.symbolCount;
     }
 
-    remove(uri: string) {
-        let id = uriMap.id(uri);
-        let symbolTable = this._tableIndex[id];
-        if (!symbolTable) {
-            return;
+    private _remove(doc:Document) {
+        const indexItems = doc.symbolTable.filter(this._indexFilter);
+        for (let n = 0, l = indexItems.length; n < l; ++n) {
+            this._definitionIndex.remove(indexItems[n], Definition.keys(indexItems[n]));
         }
-        delete this._tableIndex[id];
-        let indexItems = symbolTable.traverse(new IndexableSymbolVisitor(id)).items;
-        for (let n = 0; n < indexItems.length; ++n) {
-            this._symbolIndex.remove(indexItems[n].start, indexItems[n].keys);
-        }
-        this._symbolCount -= symbolTable.symbolCount;
+        this._symbolCount -= doc.symbolTable.symbolCount;
     }
 
     toJSON() {
         return {
             _tableIndex: this._tableIndex,
             _symbolCount: this._symbolCount,
-            _symbolIndex: this._symbolIndex.toJSON()
+            _symbolIndex: this._definitionIndex.toJSON()
         }
     }
 
@@ -267,7 +293,7 @@ export class SymbolStore {
         for (let n = 0, l = tableKeys.length; n < l; ++n) {
             this._tableIndex[tableKeys[n]] = SymbolTable.fromData(data._tableIndex[tableKeys[n]]);
         }
-        this._symbolIndex.restore(data._symbolIndex);
+        this._definitionIndex.restore(data._symbolIndex);
     }
 
     /**
@@ -277,7 +303,7 @@ export class SymbolStore {
      * @param text 
      * @param filter 
      */
-    find(text: string, filter?: Predicate<PhpSymbol>) {
+    find(text: string, filter?: Predicate<Definition>) {
 
         if (!text) {
             return [];
@@ -285,9 +311,9 @@ export class SymbolStore {
 
         let lcText = text.toLowerCase();
         let kindMask = SymbolKind.Constant | SymbolKind.Variable;
-        let result = this._indexResultToSymbols(this._symbolIndex.find(text));
-        let symbols: PhpSymbol[] = [];
-        let s: PhpSymbol;
+        let result = this._definitionIndex.find(text);
+        let symbols: Definition[] = [];
+        let s: Definition;
 
         for (let n = 0, l = result.length; n < l; ++n) {
             s = result[n];
@@ -305,20 +331,20 @@ export class SymbolStore {
      * matches indexed symbols where symbol keys begin with text.
      * Case insensitive
      */
-    match(text: string, filter?: Predicate<PhpSymbol>) {
+    match(text: string, filter?: Predicate<Definition>) {
 
         if (!text) {
             return [];
         }
 
-        let matches: PhpSymbol[] = this._indexResultToSymbols(this._symbolIndex.match(text));
+        const matches: Definition[] = this._definitionIndex.match(text);
 
         if (!filter) {
             return matches;
         }
 
-        let filtered: PhpSymbol[] = [];
-        let s: PhpSymbol;
+        const filtered: Definition[] = [];
+        let s: Definition;
 
         for (let n = 0, l = matches.length; n < l; ++n) {
             s = matches[n];
@@ -330,31 +356,31 @@ export class SymbolStore {
         return filtered;
     }
 
-    *matchIterator(text:string, filter?: Predicate<PhpSymbol>) {
+    *matchIterator(text:string, filter?: Predicate<Definition>) {
 
         if (!text) {
             return;
         }
 
-        const indexMatchIterator = this._symbolIndex.matchIterator(text);
-        const symbols = new Set<PhpSymbol>();
+        const matches: Definition[] = this._definitionIndex.match(text);
+        let s: Definition;
 
-        for(let s of indexMatchIterator){
-            if((!filter || filter(s)) && !symbols.has(s)) {
-                symbols.add(s);
+        for (let n = 0, l = matches.length; n < l; ++n) {
+            s = matches[n];
+            if (!filter || filter(s)) {
                 yield s;
             }
         }
 
     }
 
-    findSymbolsByReference(ref: Reference, memberMergeStrategy?: MemberMergeStrategy): PhpSymbol[] {
+    findSymbolsByReference(ref: Reference, memberMergeStrategy?: MemberMergeStrategy): Definition[] {
         if (!ref) {
             return [];
         }
 
-        let symbols: PhpSymbol[];
-        let fn: Predicate<PhpSymbol>;
+        let symbols: Definition[];
+        let fn: Predicate<Definition>;
         let lcName: string;
         let table: SymbolTable;
 
@@ -437,21 +463,21 @@ export class SymbolStore {
         return symbols || [];
     }
 
-    findMembers(scope: string, memberMergeStrategy: MemberMergeStrategy, predicate?: Predicate<PhpSymbol>) {
+    findMembers(scope: string, memberMergeStrategy: MemberMergeStrategy, predicate?: Predicate<Definition>) {
 
         let fqnArray = TypeString.atomicClassArray(scope);
         let type: TypeAggregate;
-        let members: PhpSymbol[] = [];
+        let members: Definition[] = [];
         for (let n = 0; n < fqnArray.length; ++n) {
             type = TypeAggregate.create(this, fqnArray[n]);
             if (type) {
                 Array.prototype.push.apply(members, type.members(memberMergeStrategy, predicate));
             }
         }
-        return Array.from(new Set<PhpSymbol>(members));
+        return Array.from(new Set<Definition>(members));
     }
 
-    findBaseMember(symbol: PhpSymbol) {
+    findBaseMember(symbol: Definition) {
 
         if (
             !symbol || !symbol.scope ||
@@ -461,15 +487,15 @@ export class SymbolStore {
             return symbol;
         }
 
-        let fn: Predicate<PhpSymbol>;
+        let fn: Predicate<Definition>;
 
         if (symbol.kind === SymbolKind.Method) {
             let name = symbol.name.toLowerCase();
-            fn = (s: PhpSymbol) => {
+            fn = (s: Definition) => {
                 return s.kind === symbol.kind && s.modifiers === symbol.modifiers && name === s.name.toLowerCase();
             };
         } else {
-            fn = (s: PhpSymbol) => {
+            fn = (s: Definition) => {
                 return s.kind === symbol.kind && s.modifiers === symbol.modifiers && symbol.name === s.name;
             };
         }
@@ -519,8 +545,8 @@ export class SymbolStore {
     }
     */
 
-    symbolLocation(symbol: PhpSymbol): Location {
-        let table = this._tableIndex[symbol.location.uriHash];
+    symbolLocation(symbol: Definition): Location {
+        let table = this._tableIndex[symbol.location.uriId];
         return table ? Location.create(table.uri, symbol.location.range) : undefined;
     }
 
@@ -554,94 +580,35 @@ export class SymbolStore {
         }
     }
 
-    private _indexResultToSymbols(results: HashedStartLocation[]) {
-
-        let table: SymbolTable;
-        let finder = new FindByStartPositionTraverser();
-        let symbols = new Set<PhpSymbol>();
-        let s: PhpSymbol;
-        let item: HashedStartLocation;
-
-        for (let n = 0, l = results.length; n < l; ++n) {
-            item = results[n];
-            table = this._tableIndex[item.uriHash];
-            if ((s = <PhpSymbol>finder.find(item.start, table.root))) {
-                symbols.add(s);
-            }
-        }
-
-        return Array.from(symbols);
-
-    }
-
-    private _sortMatches(query: string, matches: PhpSymbol[]) {
-
-        let map: { [index: string]: number } = {};
-        let s: PhpSymbol;
-        let name: string;
-        let val: number;
-        query = query.toLowerCase();
-
-        for (let n = 0, l = matches.length; n < l; ++n) {
-            s = matches[n];
-            name = s.name;
-            if (map[name] === undefined) {
-                val = (PhpSymbol.notFqn(s.name).toLowerCase().indexOf(query) + 1) * 10;
-                if (val > 0) {
-                    val = 1000 - val;
-                }
-                map[name] = val;
-            }
-            ++map[name];
-        }
-
-        let unique = Array.from(new Set(matches));
-
-        let sortFn = (a: PhpSymbol, b: PhpSymbol) => {
-            return map[b.name] - map[a.name];
-        }
-
-        unique.sort(sortFn);
-        return unique;
-
-    }
-
-    private _classOrInterfaceFilter(s: PhpSymbol) {
+    private _classOrInterfaceFilter(s: Definition) {
         return (s.kind & (SymbolKind.Class | SymbolKind.Interface)) > 0;
     }
 
-    private _classInterfaceTraitFilter(s: PhpSymbol) {
+    private _classInterfaceTraitFilter(s: Definition) {
         return (s.kind & (SymbolKind.Class | SymbolKind.Interface | SymbolKind.Trait)) > 0;
-    }
-
-    private _indexSymbols(root: PhpSymbol) {
-
-        let traverser = new TreeTraverser([root]);
-        return traverser.filter(this._indexFilter);
-
     }
 
     /**
      * No vars, params or symbols with use modifier
      * @param s 
      */
-    private _indexFilter(s: PhpSymbol) {
+    private _indexFilter(s: Definition) {
         return !(s.kind & (SymbolKind.Parameter | SymbolKind.File)) && //no params or files
-            !(s.modifiers & SymbolModifier.Use) && //no use
+            !(s.modifiers & (SymbolModifier.Use | SymbolModifier.TraitInsteadOf)) && //no use or trait insteadof
             !(s.kind === SymbolKind.Variable && s.location) && //no variables that have a location (in built globals have no loc)
             s.name.length > 0;
     }
 
 }
 
-class NameResolverVisitor implements TreeVisitor<PhpSymbol> {
+class NameResolverVisitor implements TreeVisitor<Definition> {
 
     haltTraverse = false;
     private _kindMask = SymbolKind.Class | SymbolKind.Function | SymbolKind.Constant;
 
     constructor(public pos: Position, public nameResolver: NameResolver) { }
 
-    preorder(node: PhpSymbol, spine: PhpSymbol[]) {
+    preorder(node: Definition, spine: Definition[]) {
 
         if (node.location && node.location.range.start.line > this.pos.line) {
             this.haltTraverse = true;
@@ -660,7 +627,7 @@ class NameResolverVisitor implements TreeVisitor<PhpSymbol> {
 
     }
 
-    postorder(node: PhpSymbol, spine: PhpSymbol[]) {
+    postorder(node: Definition, spine: Definition[]) {
 
         if (this.haltTraverse || (node.location && node.location.range.end.line > this.pos.line)) {
             this.haltTraverse = true;
@@ -674,10 +641,10 @@ class NameResolverVisitor implements TreeVisitor<PhpSymbol> {
     }
 }
 
-class ScopeVisitor implements TreeVisitor<PhpSymbol> {
+class ScopeVisitor implements TreeVisitor<Definition> {
 
     haltTraverse = false;
-    private _scopeStack: PhpSymbol[];
+    private _scopeStack: Definition[];
     private _kindMask = SymbolKind.Class | SymbolKind.Interface | SymbolKind.Trait | SymbolKind.Function | SymbolKind.Method | SymbolKind.File;
     private _absolute = false;
 
@@ -690,7 +657,7 @@ class ScopeVisitor implements TreeVisitor<PhpSymbol> {
         return this._scopeStack[this._scopeStack.length - 1];
     }
 
-    preorder(node: PhpSymbol, spine: PhpSymbol[]) {
+    preorder(node: Definition, spine: Definition[]) {
 
         if (node.location && node.location.range.start.line > this.pos.line) {
             this.haltTraverse = true;
@@ -714,20 +681,20 @@ class ScopeVisitor implements TreeVisitor<PhpSymbol> {
 
 }
 
-class ContainsVisitor implements TreeVisitor<PhpSymbol> {
+class ContainsVisitor implements TreeVisitor<Definition> {
 
     haltTraverse = false;
     found = false;
-    private _symbol: PhpSymbol;
+    private _symbol: Definition;
 
-    constructor(symbol: PhpSymbol) {
+    constructor(symbol: Definition) {
         this._symbol = symbol;
         if (!symbol.location) {
             throw new Error('Invalid Argument');
         }
     }
 
-    preorder(node: PhpSymbol, spine: PhpSymbol[]) {
+    preorder(node: Definition, spine: Definition[]) {
 
         if (node === this._symbol) {
             this.found = true;
@@ -747,12 +714,12 @@ class ContainsVisitor implements TreeVisitor<PhpSymbol> {
 
 interface KeyedHashedStartLocation {
     keys: string[];
-    start: HashedStartLocation;
+    start: PackedStartLocation;
 }
 
 namespace KeyedHashedStartLocation {
 
-    function keys(s: PhpSymbol) {
+    function keys(s: Definition) {
         if (s.kind === SymbolKind.Namespace) {
             let lcName = s.name.toLowerCase();
             let keys = new Set<string>();
@@ -764,20 +731,20 @@ namespace KeyedHashedStartLocation {
         return PhpSymbol.keys(s);
     }
 
-    export function create(s: PhpSymbol) {
+    export function create(s: Definition) {
         return <KeyedHashedStartLocation>{
             keys: keys(s),
             start: {
-                uriHash: s.location.uriHash,
+                uriId: s.location.uriId,
                 start: s.location.range.start
             }
         }
     }
 }
 
-class IndexableSymbolVisitor implements TreeVisitor<PhpSymbol> {
+class IndexableSymbolVisitor implements TreeVisitor<Definition> {
 
-    private _items: KeyedHashedStartLocation[];
+    private _items: Symbol[];
 
     constructor(private uriId: number) {
         this._items = [];
@@ -787,7 +754,7 @@ class IndexableSymbolVisitor implements TreeVisitor<PhpSymbol> {
         return this._items;
     }
 
-    preorder(node: PhpSymbol, spine: PhpSymbol[]) {
+    preorder(node: Definition, spine: Definition[]) {
         if (
             !(node.kind & (SymbolKind.Parameter | SymbolKind.File | SymbolKind.Variable)) && //no params or files
             !(node.modifiers & SymbolModifier.Use) && //no use
@@ -796,6 +763,52 @@ class IndexableSymbolVisitor implements TreeVisitor<PhpSymbol> {
             this._items.push(KeyedHashedStartLocation.create(node));
         }
         return true;
+    }
+
+}
+
+class ReferenceIndexVisitor implements TreeVisitor<Phrase|Token> {
+
+    private _names: Set<string>;
+    private _isScoped = 0;
+    private static readonly INDEX_NOT_KIND_MASK = SymbolKind.Parameter | SymbolKind.File | SymbolKind.Variable;
+
+    constructor(){
+        this._names = new Set<string>();
+    }
+
+    get names() {
+        return Array.from(this._names);
+    }
+
+    preorder(node:Phrase|Token, spine:(Phrase|Token)[]) {
+
+        if(
+            (<Phrase>node).phraseType === PhraseKind.MethodDeclarationBody || 
+            (<Phrase>node).phraseType === PhraseKind.FunctionDeclarationBody
+        ) {
+            ++this._isScoped;
+        }
+
+        const ref = (<ReferencePhrase>node).reference;
+        if(
+            ref && ref.name &&
+            (!(ref.kind & ReferenceIndexVisitor.INDEX_NOT_KIND_MASK) || 
+            (ref.kind & SymbolKind.Variable) > 0 && this._isScoped < 1) //allow global scoped vars
+        ) {
+            this._names.add(ref.name);
+        }
+
+        return true;
+    }
+
+    postorder(node:Phrase|Token, spine:(Phrase|Token)[]) {
+        if(
+            (<Phrase>node).phraseType === PhraseKind.MethodDeclarationBody || 
+            (<Phrase>node).phraseType === PhraseKind.FunctionDeclarationBody
+        ) {
+            --this._isScoped;
+        }
     }
 
 }

@@ -4,8 +4,8 @@
 
 'use strict';
 
-import { Phrase, PhraseType, } from '../parser/phrase';
-import { TokenType, Token } from '../parser/lexer';
+import { Phrase, PhraseKind, } from '../parser/phrase';
+import { TokenKind, Token } from '../parser/lexer';
 import { Parser } from '../parser/parser';
 import { TextDocument } from './textDocument';
 import * as lsp from 'vscode-languageserver-types';
@@ -17,12 +17,9 @@ import * as util from '../util';
 import { UriMap, UriMapDto } from './uriMap';
 import { Cache } from '../cache';
 import { ParseTree } from './parseTree';
+import {SymbolTable} from '../symbol/symbolStore';
 
 const textDocumentChangeDebounceWait = 250;
-
-export interface DocumentChangeEventArgs {
-    parsedDocument: Document;
-}
 
 export interface DocumentDto {
     
@@ -35,14 +32,14 @@ export class Document {
     private _uri:string;
     private _text: string;
     private _parseTree: ParseTree;
-    private _definitionTree: SymbolTable;
+    private _symbolTable: SymbolTable;
     private _lineOffsets:number[];
     private _changeEvent: Event<DocumentChangeEventArgs>;
     private _debounce: Debounce<null>;
     
     private _reparse = (x) => {
         this.parse();
-        this._changeEvent.trigger({ parsedDocument: this });
+        this._changeEvent.trigger({ doc: this });
     };
 
     constructor(uri: string, text: string, public version = 0) {
@@ -54,6 +51,10 @@ export class Document {
 
     get parseTree() {
         return this._parseTree;
+    }
+
+    get symbolTable() {
+        return this._symbolTable;
     }
 
     get uri() {
@@ -247,22 +248,28 @@ export interface DocumentStoreDto {
     uriMap: UriMapDto;
 }
 
-export interface DocumentOpenEventArgs {
+export interface DocumentChangeEventArgs {
+    doc: Document;
+    oldDoc:Document;
+}
 
+export interface DocumentLoadEventArgs {
+    doc:Document;
 }
 
 export interface DocumentAddEventArgs {
-
+    doc:Document;
+    cachedDoc?:Document;
 }
 
 export interface DocumentRemoveEventArgs {
-
+    doc:Document;
 }
 
 export class DocumentStore {
 
     private _documentChangeEvent: Event<DocumentChangeEventArgs>;
-    private _documentOpenEvent:Event<DocumentOpenEventArgs>;
+    private _documentLoadedEvent:Event<DocumentLoadEventArgs>;
     private _documentAddEvent:Event<DocumentAddEventArgs>;
     private _documentRemoveEvent: Event<DocumentRemoveEventArgs>;
     private _openDocuments: { [index: string]: Document };
@@ -274,8 +281,8 @@ export class DocumentStore {
     constructor(private cache: Cache) {
         this._openDocuments = {};
         this._documentChangeEvent = new Event<DocumentChangeEventArgs>();
-        this._documentOpenEvent= new Event<DocumentOpenEventArgs>();
-        this._documentAddEvent = new Event<DocumentOpenEventArgs>();
+        this._documentLoadedEvent= new Event<DocumentLoadEventArgs>();
+        this._documentAddEvent = new Event<DocumentAddEventArgs>();
         this._documentRemoveEvent = new Event<DocumentRemoveEventArgs>();
         this._unsubscribeMap = {};
     }
@@ -284,8 +291,8 @@ export class DocumentStore {
         return this._documentChangeEvent;
     }
 
-    get documentOpenEvent() {
-        return this._documentOpenEvent;
+    get documentLoadEvent() {
+        return this._documentLoadedEvent;
     }
 
     get documentAddEvent() {
@@ -346,15 +353,11 @@ export class DocumentStore {
     }
 
     /**
-     * Synchronous find
+     * Open documents only
      * @param uri 
      */
     find(uri: string) {
-        if(this._openDocuments[uri]) {
-            return this._openDocuments[uri];
-        } else {
-            return this._fromCacheSync(uri);
-        }
+        return this._openDocuments[uri];
     }
 
     private _fromCacheSync(uri:string) {

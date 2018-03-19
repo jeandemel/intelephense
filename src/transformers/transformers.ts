@@ -4,10 +4,10 @@
 
 'use strict';
 
-import {Phrase, PhraseType} from '../parser/phrase';
-import{Token, TokenType} from '../parser/lexer';
+import {Phrase, PhraseKind} from '../parser/phrase';
+import{Token, TokenKind} from '../parser/lexer';
 import {PackedRange} from '../types';
-import {Reference} from '../reference';
+import {Reference} from '../symbol/symbol';
 import * as lsp from 'vscode-languageserver-types';
 import {PhpDoc} from '../phpDoc';
 

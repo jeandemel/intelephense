@@ -4,10 +4,10 @@
 
 'use strict';
 
-import { Token, TokenType } from './lexer';
+import { Token, TokenKind } from './lexer';
 
-export const enum PhraseType {
-    Unknown,
+export const enum PhraseKind {
+    Unknown = 1000,
     AdditiveExpression,
     AnonymousClassDeclaration,
     AnonymousClassDeclarationHeader,
@@ -70,14 +70,7 @@ export const enum PhraseType {
     EncapsulatedVariableList,
     EqualityExpression,
     Error,
-    ErrorClassMemberDeclaration,
-    ErrorClassTypeDesignatorAtom,
     ErrorControlExpression,
-    ErrorExpression,
-    ErrorScopedAccessExpression,
-    ErrorTraitAdaptation,
-    ErrorVariable,
-    ErrorVariableAtom,
     EvalIntrinsic,
     ExitIntrinsic,
     ExponentiationExpression,
@@ -200,7 +193,7 @@ export interface Phrase {
     /**
      * Phrase type
      */
-    phraseType: PhraseType;
+    phraseType: PhraseKind;
 
     /**
      * Phrase and token child nodes
@@ -224,13 +217,13 @@ export interface ParseError extends Phrase {
 }
 
 export namespace Phrase {
-    export function create(type: PhraseType, children: (Phrase | Token)[]) {
+    export function create(type: PhraseKind, children: (Phrase | Token)[]) {
         return <Phrase>{ phraseType: type, children: children }
     }
 
-    export function createParseError(children: (Phrase | Token)[], unexpected: Token, expected?: TokenType) {
+    export function createParseError(children: (Phrase | Token)[], unexpected: Token, expected?: TokenKind) {
         const err = <ParseError>{
-            phraseType: PhraseType.Error,
+            phraseType: PhraseKind.Error,
             children: children,
             unexpected: unexpected
         }
@@ -242,376 +235,362 @@ export namespace Phrase {
     }
 }
 
-export function phraseTypeToString(type: PhraseType) {
+export function phraseTypeToString(type: PhraseKind) {
 
     switch (type) {
-        case PhraseType.Unknown:
+        case PhraseKind.Unknown:
             return 'Unknown';
-        case PhraseType.AdditiveExpression:
+        case PhraseKind.AdditiveExpression:
             return 'AdditiveExpression';
-        case PhraseType.AnonymousClassDeclaration:
+        case PhraseKind.AnonymousClassDeclaration:
             return 'AnonymousClassDeclaration';
-        case PhraseType.AnonymousClassDeclarationHeader:
+        case PhraseKind.AnonymousClassDeclarationHeader:
             return 'AnonymousClassDeclarationHeader';
-        case PhraseType.AnonymousFunctionCreationExpression:
+        case PhraseKind.AnonymousFunctionCreationExpression:
             return 'AnonymousFunctionCreationExpression';
-        case PhraseType.AnonymousFunctionHeader:
+        case PhraseKind.AnonymousFunctionHeader:
             return 'AnonymousFunctionHeader';
-        case PhraseType.AnonymousFunctionUseClause:
+        case PhraseKind.AnonymousFunctionUseClause:
             return 'AnonymousFunctionUseClause';
-        case PhraseType.AnonymousFunctionUseVariable:
+        case PhraseKind.AnonymousFunctionUseVariable:
             return 'AnonymousFunctionUseVariable';
-        case PhraseType.ArgumentExpressionList:
+        case PhraseKind.ArgumentExpressionList:
             return 'ArgumentExpressionList';
-        case PhraseType.ArrayCreationExpression:
+        case PhraseKind.ArrayCreationExpression:
             return 'ArrayCreationExpression';
-        case PhraseType.ArrayElement:
+        case PhraseKind.ArrayElement:
             return 'ArrayElement';
-        case PhraseType.ArrayInitialiserList:
+        case PhraseKind.ArrayInitialiserList:
             return 'ArrayInitialiserList';
-        case PhraseType.ArrayKey:
+        case PhraseKind.ArrayKey:
             return 'ArrayKey';
-        case PhraseType.ArrayValue:
+        case PhraseKind.ArrayValue:
             return 'ArrayValue';
-        case PhraseType.BitwiseExpression:
+        case PhraseKind.BitwiseExpression:
             return 'BitwiseExpression';
-        case PhraseType.BreakStatement:
+        case PhraseKind.BreakStatement:
             return 'BreakStatement';
-        case PhraseType.ByRefAssignmentExpression:
+        case PhraseKind.ByRefAssignmentExpression:
             return 'ByRefAssignmentExpression';
-        case PhraseType.CaseStatement:
+        case PhraseKind.CaseStatement:
             return 'CaseStatement';
-        case PhraseType.CaseStatementList:
+        case PhraseKind.CaseStatementList:
             return 'CaseStatementList';
-        case PhraseType.CastExpression:
+        case PhraseKind.CastExpression:
             return 'CastExpression';
-        case PhraseType.CatchClause:
+        case PhraseKind.CatchClause:
             return 'CatchClause';
-        case PhraseType.CatchClauseList:
+        case PhraseKind.CatchClauseList:
             return 'CatchClauseList';
-        case PhraseType.CatchNameList:
+        case PhraseKind.CatchNameList:
             return 'CatchNameList';
-        case PhraseType.ClassBaseClause:
+        case PhraseKind.ClassBaseClause:
             return 'ClassBaseClause';
-        case PhraseType.ClassConstantAccessExpression:
+        case PhraseKind.ClassConstantAccessExpression:
             return 'ClassConstantAccessExpression';
-        case PhraseType.ClassConstDeclaration:
+        case PhraseKind.ClassConstDeclaration:
             return 'ClassConstDeclaration';
-        case PhraseType.ClassConstElement:
+        case PhraseKind.ClassConstElement:
             return 'ClassConstElement';
-        case PhraseType.ClassConstElementList:
+        case PhraseKind.ClassConstElementList:
             return 'ClassConstElementList';
-        case PhraseType.ClassDeclaration:
+        case PhraseKind.ClassDeclaration:
             return 'ClassDeclaration';
-        case PhraseType.ClassDeclarationBody:
+        case PhraseKind.ClassDeclarationBody:
             return 'ClassDeclarationBody';
-        case PhraseType.ClassDeclarationHeader:
+        case PhraseKind.ClassDeclarationHeader:
             return 'ClassDeclarationHeader';
-        case PhraseType.ClassInterfaceClause:
+        case PhraseKind.ClassInterfaceClause:
             return 'ClassInterfaceClause';
-        case PhraseType.ClassMemberDeclarationList:
+        case PhraseKind.ClassMemberDeclarationList:
             return 'ClassMemberDeclarationList';
-        case PhraseType.ClassModifiers:
+        case PhraseKind.ClassModifiers:
             return 'ClassModifiers';
-        case PhraseType.ClassTypeDesignator:
+        case PhraseKind.ClassTypeDesignator:
             return 'ClassTypeDesignator';
-        case PhraseType.CloneExpression:
+        case PhraseKind.CloneExpression:
             return 'CloneExpression';
-        case PhraseType.ClosureUseList:
+        case PhraseKind.ClosureUseList:
             return 'ClosureUseList';
-        case PhraseType.CoalesceExpression:
+        case PhraseKind.CoalesceExpression:
             return 'CoalesceExpression';
-        case PhraseType.CompoundAssignmentExpression:
+        case PhraseKind.CompoundAssignmentExpression:
             return 'CompoundAssignmentExpression';
-        case PhraseType.CompoundStatement:
+        case PhraseKind.CompoundStatement:
             return 'CompoundStatement';
-        case PhraseType.TernaryExpression:
+        case PhraseKind.TernaryExpression:
             return 'TernaryExpression';
-        case PhraseType.ConstantAccessExpression:
+        case PhraseKind.ConstantAccessExpression:
             return 'ConstantAccessExpression';
-        case PhraseType.ConstDeclaration:
+        case PhraseKind.ConstDeclaration:
             return 'ConstDeclaration';
-        case PhraseType.ConstElement:
+        case PhraseKind.ConstElement:
             return 'ConstElement';
-        case PhraseType.ConstElementList:
+        case PhraseKind.ConstElementList:
             return 'ConstElementList';
-        case PhraseType.ContinueStatement:
+        case PhraseKind.ContinueStatement:
             return 'ContinueStatement';
-        case PhraseType.DeclareDirective:
+        case PhraseKind.DeclareDirective:
             return 'DeclareDirective';
-        case PhraseType.DeclareStatement:
+        case PhraseKind.DeclareStatement:
             return 'DeclareStatement';
-        case PhraseType.DefaultArgumentSpecifier:
+        case PhraseKind.DefaultArgumentSpecifier:
             return 'DefaultArgumentSpecifier';
-        case PhraseType.DefaultStatement:
+        case PhraseKind.DefaultStatement:
             return 'DefaultStatement';
-        case PhraseType.DoStatement:
+        case PhraseKind.DoStatement:
             return 'DoStatement';
-        case PhraseType.DoubleQuotedStringLiteral:
+        case PhraseKind.DoubleQuotedStringLiteral:
             return 'DoubleQuotedStringLiteral';
-        case PhraseType.EchoIntrinsic:
+        case PhraseKind.EchoIntrinsic:
             return 'EchoIntrinsic';
-        case PhraseType.ElseClause:
+        case PhraseKind.ElseClause:
             return 'ElseClause';
-        case PhraseType.ElseIfClause:
+        case PhraseKind.ElseIfClause:
             return 'ElseIfClause';
-        case PhraseType.ElseIfClauseList:
+        case PhraseKind.ElseIfClauseList:
             return 'ElseIfClauseList';
-        case PhraseType.EmptyIntrinsic:
+        case PhraseKind.EmptyIntrinsic:
             return 'EmptyIntrinsic';
-        case PhraseType.EncapsulatedExpression:
+        case PhraseKind.EncapsulatedExpression:
             return 'EncapsulatedExpression';
-        case PhraseType.EncapsulatedVariable:
+        case PhraseKind.EncapsulatedVariable:
             return 'EncapsulatedVariable';
-        case PhraseType.EncapsulatedVariableList:
+        case PhraseKind.EncapsulatedVariableList:
             return 'EncapsulatedVariableList';
-        case PhraseType.EqualityExpression:
+        case PhraseKind.EqualityExpression:
             return 'EqualityExpression';
-        case PhraseType.Error:
+        case PhraseKind.Error:
             return 'Error';
-        case PhraseType.ErrorClassMemberDeclaration:
-            return 'ErrorClassMemberDeclaration';
-        case PhraseType.ErrorClassTypeDesignatorAtom:
-            return 'ErrorClassTypeDesignatorAtom';
-        case PhraseType.ErrorControlExpression:
+        case PhraseKind.ErrorControlExpression:
             return 'ErrorControlExpression';
-        case PhraseType.ErrorExpression:
-            return 'ErrorExpression';
-        case PhraseType.ErrorScopedAccessExpression:
-            return 'ErrorScopedAccessExpression';
-        case PhraseType.ErrorTraitAdaptation:
-            return 'ErrorTraitAdaptation';
-        case PhraseType.ErrorVariable:
-            return 'ErrorVariable';
-        case PhraseType.ErrorVariableAtom:
-            return 'ErrorVariableAtom';
-        case PhraseType.EvalIntrinsic:
+        case PhraseKind.EvalIntrinsic:
             return 'EvalIntrinsic';
-        case PhraseType.ExitIntrinsic:
+        case PhraseKind.ExitIntrinsic:
             return 'ExitIntrinsic';
-        case PhraseType.ExponentiationExpression:
+        case PhraseKind.ExponentiationExpression:
             return 'ExponentiationExpression';
-        case PhraseType.ExpressionList:
+        case PhraseKind.ExpressionList:
             return 'ExpressionList';
-        case PhraseType.ExpressionStatement:
+        case PhraseKind.ExpressionStatement:
             return 'ExpressionStatement';
-        case PhraseType.FinallyClause:
+        case PhraseKind.FinallyClause:
             return 'FinallyClause';
-        case PhraseType.ForControl:
+        case PhraseKind.ForControl:
             return 'ForControl';
-        case PhraseType.ForeachCollection:
+        case PhraseKind.ForeachCollection:
             return 'ForeachCollection';
-        case PhraseType.ForeachKey:
+        case PhraseKind.ForeachKey:
             return 'ForeachKey';
-        case PhraseType.ForeachStatement:
+        case PhraseKind.ForeachStatement:
             return 'ForeachStatement';
-        case PhraseType.ForeachValue:
+        case PhraseKind.ForeachValue:
             return 'ForeachValue';
-        case PhraseType.ForEndOfLoop:
+        case PhraseKind.ForEndOfLoop:
             return 'ForEndOfLoop';
-        case PhraseType.ForExpressionGroup:
+        case PhraseKind.ForExpressionGroup:
             return 'ForExpressionGroup';
-        case PhraseType.ForInitialiser:
+        case PhraseKind.ForInitialiser:
             return 'ForInitialiser';
-        case PhraseType.ForStatement:
+        case PhraseKind.ForStatement:
             return 'ForStatement';
-        case PhraseType.FullyQualifiedName:
+        case PhraseKind.FullyQualifiedName:
             return 'FullyQualifiedName';
-        case PhraseType.FunctionCallExpression:
+        case PhraseKind.FunctionCallExpression:
             return 'FunctionCallExpression';
-        case PhraseType.FunctionDeclaration:
+        case PhraseKind.FunctionDeclaration:
             return 'FunctionDeclaration';
-        case PhraseType.FunctionDeclarationHeader:
+        case PhraseKind.FunctionDeclarationHeader:
             return 'FunctionDeclarationHeader';
-        case PhraseType.FunctionDeclarationBody:
+        case PhraseKind.FunctionDeclarationBody:
             return 'FunctionDeclarationBody';
-        case PhraseType.FunctionStaticDeclaration:
+        case PhraseKind.FunctionStaticDeclaration:
             return 'FunctionStaticDeclaration';
-        case PhraseType.FunctionStaticInitialiser:
+        case PhraseKind.FunctionStaticInitialiser:
             return 'FunctionStaticInitialiser';
-        case PhraseType.GlobalDeclaration:
+        case PhraseKind.GlobalDeclaration:
             return 'GlobalDeclaration';
-        case PhraseType.GotoStatement:
+        case PhraseKind.GotoStatement:
             return 'GotoStatement';
-        case PhraseType.HaltCompilerStatement:
+        case PhraseKind.HaltCompilerStatement:
             return 'HaltCompilerStatement';
-        case PhraseType.HeredocStringLiteral:
+        case PhraseKind.HeredocStringLiteral:
             return 'HeredocStringLiteral';
-        case PhraseType.Identifier:
+        case PhraseKind.Identifier:
             return 'Identifier';
-        case PhraseType.IfStatement:
+        case PhraseKind.IfStatement:
             return 'IfStatement';
-        case PhraseType.IncludeExpression:
+        case PhraseKind.IncludeExpression:
             return 'IncludeExpression';
-        case PhraseType.IncludeOnceExpression:
+        case PhraseKind.IncludeOnceExpression:
             return 'IncludeOnceExpression';
-        case PhraseType.InlineText:
+        case PhraseKind.InlineText:
             return 'InlineText';
-        case PhraseType.InstanceOfExpression:
+        case PhraseKind.InstanceOfExpression:
             return 'InstanceOfExpression';
-        case PhraseType.InstanceofTypeDesignator:
+        case PhraseKind.InstanceofTypeDesignator:
             return 'InstanceofTypeDesignator';
-        case PhraseType.InterfaceBaseClause:
+        case PhraseKind.InterfaceBaseClause:
             return 'InterfaceBaseClause';
-        case PhraseType.InterfaceDeclaration:
+        case PhraseKind.InterfaceDeclaration:
             return 'InterfaceDeclaration';
-        case PhraseType.InterfaceDeclarationBody:
+        case PhraseKind.InterfaceDeclarationBody:
             return 'InterfaceDeclarationBody';
-        case PhraseType.InterfaceDeclarationHeader:
+        case PhraseKind.InterfaceDeclarationHeader:
             return 'InterfaceDeclarationHeader';
-        case PhraseType.InterfaceMemberDeclarationList:
+        case PhraseKind.InterfaceMemberDeclarationList:
             return 'InterfaceMemberDeclarationList';
-        case PhraseType.IssetIntrinsic:
+        case PhraseKind.IssetIntrinsic:
             return 'IssetIntrinsic';
-        case PhraseType.ListIntrinsic:
+        case PhraseKind.ListIntrinsic:
             return 'ListIntrinsic';
-        case PhraseType.LogicalExpression:
+        case PhraseKind.LogicalExpression:
             return 'LogicalExpression';
-        case PhraseType.MemberModifierList:
+        case PhraseKind.MemberModifierList:
             return 'MemberModifierList';
-        case PhraseType.MemberName:
+        case PhraseKind.MemberName:
             return 'MemberName';
-        case PhraseType.MethodCallExpression:
+        case PhraseKind.MethodCallExpression:
             return 'MethodCallExpression';
-        case PhraseType.MethodDeclaration:
+        case PhraseKind.MethodDeclaration:
             return 'MethodDeclaration';
-        case PhraseType.MethodDeclarationBody:
+        case PhraseKind.MethodDeclarationBody:
             return 'MethodDeclarationBody';
-        case PhraseType.MethodDeclarationHeader:
+        case PhraseKind.MethodDeclarationHeader:
             return 'MethodDeclarationHeader';
-        case PhraseType.MethodReference:
+        case PhraseKind.MethodReference:
             return 'MethodReference';
-        case PhraseType.MultiplicativeExpression:
+        case PhraseKind.MultiplicativeExpression:
             return 'MultiplicativeExpression';
-        case PhraseType.NamedLabelStatement:
+        case PhraseKind.NamedLabelStatement:
             return 'NamedLabelStatement';
-        case PhraseType.NamespaceAliasingClause:
+        case PhraseKind.NamespaceAliasingClause:
             return 'NamespaceAliasingClause';
-        case PhraseType.NamespaceDefinition:
+        case PhraseKind.NamespaceDefinition:
             return 'NamespaceDefinition';
-        case PhraseType.NamespaceName:
+        case PhraseKind.NamespaceName:
             return 'NamespaceName';
-        case PhraseType.NamespaceUseClause:
+        case PhraseKind.NamespaceUseClause:
             return 'NamespaceUseClause';
-        case PhraseType.NamespaceUseClauseList:
+        case PhraseKind.NamespaceUseClauseList:
             return 'NamespaceUseClauseList';
-        case PhraseType.NamespaceUseDeclaration:
+        case PhraseKind.NamespaceUseDeclaration:
             return 'NamespaceUseDeclaration';
-        case PhraseType.NamespaceUseGroupClause:
+        case PhraseKind.NamespaceUseGroupClause:
             return 'NamespaceUseGroupClause';
-        case PhraseType.NamespaceUseGroupClauseList:
+        case PhraseKind.NamespaceUseGroupClauseList:
             return 'NamespaceUseGroupClauseList';
-        case PhraseType.NullStatement:
+        case PhraseKind.NullStatement:
             return 'NullStatement';
-        case PhraseType.ObjectCreationExpression:
+        case PhraseKind.ObjectCreationExpression:
             return 'ObjectCreationExpression';
-        case PhraseType.ParameterDeclaration:
+        case PhraseKind.ParameterDeclaration:
             return 'ParameterDeclaration';
-        case PhraseType.ParameterDeclarationList:
+        case PhraseKind.ParameterDeclarationList:
             return 'ParameterDeclarationList';
-        case PhraseType.PostfixDecrementExpression:
+        case PhraseKind.PostfixDecrementExpression:
             return 'PostfixDecrementExpression';
-        case PhraseType.PostfixIncrementExpression:
+        case PhraseKind.PostfixIncrementExpression:
             return 'PostfixIncrementExpression';
-        case PhraseType.PrefixDecrementExpression:
+        case PhraseKind.PrefixDecrementExpression:
             return 'PrefixDecrementExpression';
-        case PhraseType.PrefixIncrementExpression:
+        case PhraseKind.PrefixIncrementExpression:
             return 'PrefixIncrementExpression';
-        case PhraseType.PrintIntrinsic:
+        case PhraseKind.PrintIntrinsic:
             return 'PrintIntrinsic';
-        case PhraseType.PropertyAccessExpression:
+        case PhraseKind.PropertyAccessExpression:
             return 'PropertyAccessExpression';
-        case PhraseType.PropertyDeclaration:
+        case PhraseKind.PropertyDeclaration:
             return 'PropertyDeclaration';
-        case PhraseType.PropertyElement:
+        case PhraseKind.PropertyElement:
             return 'PropertyElement';
-        case PhraseType.PropertyElementList:
+        case PhraseKind.PropertyElementList:
             return 'PropertyElementList';
-        case PhraseType.PropertyInitialiser:
+        case PhraseKind.PropertyInitialiser:
             return 'PropertyInitialiser';
-        case PhraseType.QualifiedName:
+        case PhraseKind.QualifiedName:
             return 'QualifiedName';
-        case PhraseType.QualifiedNameList:
+        case PhraseKind.QualifiedNameList:
             return 'QualifiedNameList';
-        case PhraseType.RelationalExpression:
+        case PhraseKind.RelationalExpression:
             return 'RelationalExpression';
-        case PhraseType.RelativeQualifiedName:
+        case PhraseKind.RelativeQualifiedName:
             return 'RelativeQualifiedName';
-        case PhraseType.RelativeScope:
+        case PhraseKind.RelativeScope:
             return 'RelativeScope';
-        case PhraseType.RequireExpression:
+        case PhraseKind.RequireExpression:
             return 'RequireExpression';
-        case PhraseType.RequireOnceExpression:
+        case PhraseKind.RequireOnceExpression:
             return 'RequireOnceExpression';
-        case PhraseType.ReturnStatement:
+        case PhraseKind.ReturnStatement:
             return 'ReturnStatement';
-        case PhraseType.ReturnType:
+        case PhraseKind.ReturnType:
             return 'ReturnType';
-        case PhraseType.ScopedCallExpression:
+        case PhraseKind.ScopedCallExpression:
             return 'ScopedCallExpression';
-        case PhraseType.ScopedMemberName:
+        case PhraseKind.ScopedMemberName:
             return 'ScopedMemberName';
-        case PhraseType.ScopedPropertyAccessExpression:
+        case PhraseKind.ScopedPropertyAccessExpression:
             return 'ScopedPropertyAccessExpression';
-        case PhraseType.ShellCommandExpression:
+        case PhraseKind.ShellCommandExpression:
             return 'ShellCommandExpression';
-        case PhraseType.ShiftExpression:
+        case PhraseKind.ShiftExpression:
             return 'ShiftExpression';
-        case PhraseType.SimpleAssignmentExpression:
+        case PhraseKind.SimpleAssignmentExpression:
             return 'SimpleAssignmentExpression';
-        case PhraseType.SimpleVariable:
+        case PhraseKind.SimpleVariable:
             return 'SimpleVariable';
-        case PhraseType.StatementList:
+        case PhraseKind.StatementList:
             return 'StatementList';
-        case PhraseType.StaticVariableDeclaration:
+        case PhraseKind.StaticVariableDeclaration:
             return 'StaticVariableDeclaration';
-        case PhraseType.StaticVariableDeclarationList:
+        case PhraseKind.StaticVariableDeclarationList:
             return 'StaticVariableDeclarationList';
-        case PhraseType.SubscriptExpression:
+        case PhraseKind.SubscriptExpression:
             return 'SubscriptExpression';
-        case PhraseType.SwitchStatement:
+        case PhraseKind.SwitchStatement:
             return 'SwitchStatement';
-        case PhraseType.ThrowStatement:
+        case PhraseKind.ThrowStatement:
             return 'ThrowStatement';
-        case PhraseType.TraitAdaptationList:
+        case PhraseKind.TraitAdaptationList:
             return 'TraitAdaptationList';
-        case PhraseType.TraitAlias:
+        case PhraseKind.TraitAlias:
             return 'TraitAlias';
-        case PhraseType.TraitDeclaration:
+        case PhraseKind.TraitDeclaration:
             return 'TraitDeclaration';
-        case PhraseType.TraitDeclarationBody:
+        case PhraseKind.TraitDeclarationBody:
             return 'TraitDeclarationBody';
-        case PhraseType.TraitDeclarationHeader:
+        case PhraseKind.TraitDeclarationHeader:
             return 'TraitDeclarationHeader';
-        case PhraseType.TraitMemberDeclarationList:
+        case PhraseKind.TraitMemberDeclarationList:
             return 'TraitMemberDeclarationList';
-        case PhraseType.TraitPrecedence:
+        case PhraseKind.TraitPrecedence:
             return 'TraitPrecedence';
-        case PhraseType.TraitUseClause:
+        case PhraseKind.TraitUseClause:
             return 'TraitUseClause';
-        case PhraseType.TraitUseSpecification:
+        case PhraseKind.TraitUseSpecification:
             return 'TraitUseSpecification';
-        case PhraseType.TryStatement:
+        case PhraseKind.TryStatement:
             return 'TryStatement';
-        case PhraseType.TypeDeclaration:
+        case PhraseKind.TypeDeclaration:
             return 'TypeDeclaration';
-        case PhraseType.UnaryOpExpression:
+        case PhraseKind.UnaryOpExpression:
             return 'UnaryOpExpression';
-        case PhraseType.UnsetIntrinsic:
+        case PhraseKind.UnsetIntrinsic:
             return 'UnsetIntrinsic';
-        case PhraseType.VariableList:
+        case PhraseKind.VariableList:
             return 'VariableList';
-        case PhraseType.VariableNameList:
+        case PhraseKind.VariableNameList:
             return 'VariableNameList';
-        case PhraseType.VariadicUnpacking:
+        case PhraseKind.VariadicUnpacking:
             return 'VariadicUnpacking';
-        case PhraseType.WhileStatement:
+        case PhraseKind.WhileStatement:
             return 'WhileStatement';
-        case PhraseType.YieldExpression:
+        case PhraseKind.YieldExpression:
             return 'YieldExpression';
-        case PhraseType.YieldFromExpression:
+        case PhraseKind.YieldFromExpression:
             return 'YieldFromExpression';
-        case PhraseType.DocBlock:
+        case PhraseKind.DocBlock:
             return 'DocBlock';
         default:
             return '';

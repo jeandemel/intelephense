@@ -6,7 +6,7 @@
 
 'use strict';
 
-import { PhpSymbol, SymbolKind } from './symbol';
+import { SymbolKind } from './symbol/symbol';
 
 export interface ImportRule {
     fqn:string;
@@ -20,6 +20,19 @@ interface ClassIdentifier {
 }
 
 export class NameResolver {
+
+    private static readonly RESERVED_WORDS: { [name: string]: number } = {
+        'int': 1,
+        'string': 1,
+        'bool': 1,
+        'float': 1,
+        'iterable': 1,
+        'true': 1,
+        'false': 1,
+        'null': 1,
+        'void': 1,
+        'object': 1
+    };
 
     private _classStack:ClassIdentifier[];
     rules:ImportRule[];
@@ -60,6 +73,10 @@ export class NameResolver {
         }
 
         let lcNotFqn = notFqn.toLowerCase();
+
+        if(NameResolver.RESERVED_WORDS[lcNotFqn] !== undefined) {
+            return lcNotFqn;
+        }
 
         switch(lcNotFqn) {
             case 'self':

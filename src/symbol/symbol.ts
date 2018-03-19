@@ -4,12 +4,9 @@
 
 'use strict';
 
-import { TypeString } from './typeString';
-import { BinarySearch } from './types';
 import { Location, Range } from 'vscode-languageserver-types';
-import { Predicate, PackedLocation } from './types';
-import * as util from './util';
-import { Reference } from './reference';
+import { Predicate, PackedLocation, PackedRange } from '../types';
+import * as util from '../util';
 
 export const enum SymbolKind {
     None = 0,
@@ -52,39 +49,36 @@ export const enum SymbolModifier {
     TraitAs = 1 << 19
 }
 
-export interface PhpSymbolDoc {
-    description?: string;
+export interface Reference extends SymbolIdentifier {
+    scope?:string;
     type?: string;
+    unresolvedName?: string;
 }
 
-export namespace PhpSymbolDoc {
-    export function create(description?: string, type?: string): PhpSymbolDoc {
-        return {
-            description: description || '',
-            type: type || ''
-        };
+export namespace Reference {
+    export function create(kind: SymbolKind, name: string, loc:PackedLocation): Reference {
+        return { kind: kind, name: name, location: loc };
     }
 }
 
-export interface PhpSymbol extends SymbolIdentifier {
-    location:PackedLocation;
+export interface Definition extends SymbolIdentifier {
     scope?: string;
     modifiers?: SymbolModifier;
-    doc?: PhpSymbolDoc;
     type?: string;
     associated?: Reference[];
-    children?: PhpSymbol[];
+    children?: Definition[];
     value?: string;
 }
 
 export interface SymbolIdentifier {
     kind: SymbolKind;
     name: string;
+    location:PackedLocation;
 }
 
-export namespace PhpSymbol {
+export namespace Definition {
 
-    export function keys(s: PhpSymbol) {
+    export function keys(s: Definition) {
         if (!s.name) {
             return [];
         }
@@ -122,15 +116,15 @@ export namespace PhpSymbol {
         return suffixes;
     }
 
-    function isParameter(s: PhpSymbol) {
+    function isParameter(s: Definition) {
         return s.kind === SymbolKind.Parameter;
     }
 
-    export function isClassLike(s: PhpSymbol) {
+    export function isClassLike(s: Definition) {
         return (s.kind & (SymbolKind.Class | SymbolKind.Interface | SymbolKind.Trait)) > 0;
     }
 
-    export function signatureString(s: PhpSymbol, excludeTypeInfo?: boolean) {
+    export function signatureString(s: Definition, excludeTypeInfo?: boolean) {
 
         if (!s || !(s.kind & (SymbolKind.Function | SymbolKind.Method))) {
             return '';
@@ -138,7 +132,7 @@ export namespace PhpSymbol {
 
         const params = s.children ? s.children.filter(isParameter) : [];
         const paramStrings: String[] = [];
-        let param: PhpSymbol;
+        let param: Definition;
         let parts: string[];
         let paramType: string;
         let closeBrackets = '';
@@ -152,9 +146,8 @@ export namespace PhpSymbol {
             }
 
             if (!excludeTypeInfo) {
-                paramType = PhpSymbol.type(param);
-                if (paramType) {
-                    parts.push(paramType);
+                if (param.type) {
+                    parts.push(param.type);
                 }
             }
 
@@ -173,9 +166,8 @@ export namespace PhpSymbol {
         let sig = `(${paramStrings.join('')}${closeBrackets})`;
 
         if (!excludeTypeInfo) {
-            const sType = PhpSymbol.type(s);
-            if (sType) {
-                sig += `: ${sType}`;
+            if (s.type) {
+                sig += `: ${s.type}`;
             }
         }
 
@@ -183,7 +175,7 @@ export namespace PhpSymbol {
 
     }
 
-    export function hasParameters(s: PhpSymbol) {
+    export function hasParameters(s: Definition) {
         return s.children && s.children.find(isParameter) !== undefined;
     }
 
@@ -208,7 +200,7 @@ export namespace PhpSymbol {
      * Shallow clone
      * @param s 
      */
-    export function clone(s: PhpSymbol): PhpSymbol {
+    export function clone(s: Definition): Definition {
         return {
             kind: s.kind,
             name: s.name,
@@ -217,24 +209,12 @@ export namespace PhpSymbol {
             modifiers: s.modifiers,
             associated: s.associated,
             type: s.type,
-            doc: s.doc,
             scope: s.scope,
             value: s.value
         };
     }
 
-    export function type(s: PhpSymbol) {
-        if (s.type) {
-            return s.type;
-        } else if (s.doc && s.doc.type) {
-            return s.doc.type;
-        } else {
-            return '';
-        }
-
-    }
-
-    export function setScope(symbols: PhpSymbol[], scope: string) {
+    export function setScope(symbols: Definition[], scope: string) {
         if (!symbols) {
             return symbols;
         }
@@ -244,7 +224,7 @@ export namespace PhpSymbol {
         return symbols;
     }
 
-    export function create(kind: SymbolKind, name: string, location?: PackedLocation): PhpSymbol {
+    export function create(kind: SymbolKind, name: string, location?: PackedLocation): Definition {
         return {
             kind: kind,
             name: name,
@@ -252,23 +232,23 @@ export namespace PhpSymbol {
         };
     }
 
-    export function filterChildren(parent: PhpSymbol, fn: Predicate<PhpSymbol>) {
+    export function filterChildren(parent: Definition, fn: Predicate<Definition>) {
         if (!parent || !parent.children) {
             return [];
         }
 
-        return util.filter<PhpSymbol>(parent.children, fn);
+        return util.filter<Definition>(parent.children, fn);
     }
 
-    export function findChild(parent: PhpSymbol, fn: Predicate<PhpSymbol>) {
+    export function findChild(parent: Definition, fn: Predicate<Definition>) {
         if (!parent || !parent.children) {
             return undefined;
         }
 
-        return util.find<PhpSymbol>(parent.children, fn);
+        return util.find<Definition>(parent.children, fn);
     }
 
-    export function isAssociated(symbol: PhpSymbol, name: string) {
+    export function isAssociated(symbol: Definition, name: string) {
         let lcName = name.toLowerCase();
         let fn = (x: Reference) => {
             return lcName === x.name.toLowerCase();
@@ -280,15 +260,15 @@ export namespace PhpSymbol {
      * uniqueness determined by name and symbol kind
      * @param symbol 
      */
-    export function unique(symbols: PhpSymbol[]) {
+    export function unique(symbols: Definition[]) {
 
-        let uniqueSymbols: PhpSymbol[] = [];
+        let uniqueSymbols: Definition[] = [];
         if (!symbols) {
             return uniqueSymbols;
         }
 
         let map: { [index: string]: SymbolKind } = {};
-        let s: PhpSymbol;
+        let s: Definition;
 
         for (let n = 0, l = symbols.length; n < l; ++n) {
             s = symbols[n];
@@ -301,6 +281,10 @@ export namespace PhpSymbol {
         return uniqueSymbols;
     }
 
+    export function isEqual(a:Definition, b:Definition) {
+        return a.kind === b.kind && a.name === b.name;
+    }
+
 }
 
 /**
@@ -308,21 +292,21 @@ export namespace PhpSymbol {
  */
 export class UniqueSymbolSet {
 
-    private _symbols: PhpSymbol[];
+    private _symbols: Definition[];
     private _map: { [index: string]: SymbolKind } = {};
 
     constructor() {
         this._symbols = [];
     }
 
-    add(s: PhpSymbol) {
+    add(s: Definition) {
         if (!this.has(s)) {
             this._symbols.push(s);
             this._map[s.name] |= s.kind;
         }
     }
 
-    has(s: PhpSymbol) {
+    has(s: Definition) {
         return (this._map[s.name] & s.kind) === s.kind;
     }
 
