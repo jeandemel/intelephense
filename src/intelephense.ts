@@ -25,8 +25,8 @@ import { Log, LogWriter } from './logger';
 import * as path from 'path';
 export { LanguageRange } from './parsedDocument';
 import { HoverProvider } from './hoverProvider';
+import { CodeActionProvider } from './codeActionProvider';
 import { HighlightProvider } from './highlightProvider';
-
 
 export namespace Intelephense {
 
@@ -44,6 +44,7 @@ export namespace Intelephense {
     let nameTextEditProvider: NameTextEditProvider;
     let referenceProvider: ReferenceProvider;
     let hoverProvider: HoverProvider;
+    let codeActionProvider: CodeActionProvider;
     let highlightProvider: HighlightProvider;
     let cacheClear = false;
     let symbolCache: Cache;
@@ -90,6 +91,8 @@ export namespace Intelephense {
         referenceProvider = new ReferenceProvider(documentStore, symbolStore, refStore);
         hoverProvider = new HoverProvider(documentStore, symbolStore, refStore);
         highlightProvider = new HighlightProvider(documentStore, symbolStore, refStore);
+        codeActionProvider = new CodeActionProvider(documentStore, symbolStore, refStore);
+        
 
         //keep stores in sync
         documentStore.parsedDocumentChangeEvent.subscribe((args) => {
@@ -426,6 +429,11 @@ export namespace Intelephense {
     export function provideReferences(doc: lsp.TextDocumentIdentifier, pos: lsp.Position, context: lsp.ReferenceContext) {
         flushParseDebounce(doc.uri);
         return referenceProvider.provideReferenceLocations(doc.uri, pos, context);
+    }
+
+    export function provideCodeAction(doc: lsp.TextDocumentIdentifier, range: lsp.Range, context: lsp.CodeActionContext) {
+        flushParseDebounce(doc.uri);
+        return codeActionProvider.provideCodeAction(doc.uri, range, context);
     }
 
     function flushParseDebounce(uri: string) {

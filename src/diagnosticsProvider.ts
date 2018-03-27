@@ -152,10 +152,20 @@ class ErrorVisitor implements TreeVisitor<Phrase | Token>{
     }
 
     preorder(node: Token | Phrase, spine: (Token | Phrase)[]) {
-
+        
         if ((<Phrase>node).phraseType === PhraseType.Error) {
             this._errors.push(<ParseError>node);
             return false;
+        }
+
+        if ((<Phrase>node).phraseType === PhraseType.ClassInterfaceClause) {
+            for(let children of (<Phrase>node).children) {
+                if((<Phrase>children).children) {
+                    console.log((<Phrase>children).children)
+                } else {
+                    console.log((<Token>children).modeStack);
+                }
+            }
         }
 
         return true;

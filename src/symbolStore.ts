@@ -9,7 +9,7 @@ import { Reference } from './reference';
 import { TreeTraverser, Predicate, TreeVisitor, Traversable, BinarySearch, NameIndex } from './types';
 import { Position, Location, Range } from 'vscode-languageserver-types';
 import { TypeString } from './typeString';
-import * as builtInSymbols from './builtInSymbols.json';
+import {builtInSymbols} from './builtInSymbols';
 import { ParsedDocument, ParsedDocumentChangeEventArgs } from './parsedDocument';
 import { SymbolReader } from './symbolReader';
 import { NameResolver } from './nameResolver';

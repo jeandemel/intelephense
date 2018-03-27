@@ -1,4 +1,4 @@
-[
+export const builtInSymbols = [
   {
     "kind": 1,
     "name": "SplFileInfo",
