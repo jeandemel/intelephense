@@ -5,9 +5,12 @@
 'use strict';
 
 import { ParsedDocument, ParsedDocumentChangeEventArgs } from './parsedDocument';
-import { TreeVisitor, Event, Debounce, Unsubscribe } from './types';
+import { TreeVisitor, Event, Debounce, Unsubscribe, Predicate } from './types';
 import { Phrase, Token, ParseError, tokenTypeToString, PhraseType } from 'php7parser';
 import * as lsp from 'vscode-languageserver-types';
+import { SymbolStore } from './symbolStore';
+import { ReferenceStore } from './reference';
+import { SymbolKind, PhpSymbol, SymbolModifier } from './symbol';
 
 export interface PublishDiagnosticsEventArgs {
     uri: string;
@@ -32,7 +35,7 @@ export class DiagnosticsProvider {
         this._publish.trigger({ uri: args.parsedDocument.uri, diagnostics: diagnostics });
     };
 
-    constructor() {
+    constructor(public symbolStore:SymbolStore, public refStore:ReferenceStore) {
         this._debounceWaitTime = 1000;
         this._docs = {};
         this._publish = new Event<PublishDiagnosticsEventArgs>();
@@ -105,6 +108,19 @@ export class DiagnosticsProvider {
 
         doc.traverse(parseErrorVisitor);
         let parseErrors = parseErrorVisitor.errors;
+        let classFilter: Predicate<PhpSymbol> = (x) => {
+            return x.kind === SymbolKind.Class && x.modifiers !== SymbolModifier.Use;
+        };
+        
+        let classes = this.symbolStore.getSymbolTable(uri).filter(classFilter);
+        for(let classe of classes) {
+            for(let asso of classe.associated) {
+                let abstr = this.symbolStore.find(asso.name)[0]
+                let methods = abstr.children;
+                console.log(methods);
+            }
+        }
+         
 
         for (let n = 0, l = parseErrors.length; n < l; ++n) {
             diagnostics.push(this._parseErrorToDiagnostic(parseErrors[n], doc));
@@ -158,15 +174,15 @@ class ErrorVisitor implements TreeVisitor<Phrase | Token>{
             return false;
         }
 
-        if ((<Phrase>node).phraseType === PhraseType.ClassInterfaceClause) {
-            for(let children of (<Phrase>node).children) {
-                if((<Phrase>children).children) {
-                    console.log((<Phrase>children).children)
-                } else {
-                    console.log((<Token>children).modeStack);
-                }
-            }
-        }
+        // if ((<Phrase>node).phraseType === PhraseType.ClassInterfaceClause) {
+        //     for(let children of (<Phrase>node).children) {
+        //         if((<Phrase>children).children) {
+        //             console.log((<Phrase>children).children)
+        //         } else {
+        //             console.log((<Token>children).modeStack);
+        //         }
+        //     }
+        // }
 
         return true;
 

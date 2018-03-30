@@ -83,7 +83,7 @@ export namespace Intelephense {
         refStore = new ReferenceStore(refCache);
         symbolProvider = new SymbolProvider(symbolStore);
         completionProvider = new CompletionProvider(symbolStore, documentStore, refStore);
-        diagnosticsProvider = new DiagnosticsProvider();
+        diagnosticsProvider = new DiagnosticsProvider(symbolStore, refStore);
         signatureHelpProvider = new SignatureHelpProvider(symbolStore, documentStore, refStore);
         definitionProvider = new DefinitionProvider(symbolStore, documentStore, refStore);
         formatProvider = new FormatProvider(documentStore);
